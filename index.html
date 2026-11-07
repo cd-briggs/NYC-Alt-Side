@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYC Parking</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  html, body { margin: 0; height: 100%; font: 14px/1.4 -apple-system, system-ui, sans-serif; }
+  #map { position: absolute; inset: 0 0 0 0; }
+  #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 316px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
+  #ctl label { cursor: pointer; }
+  #modes { display: flex; background: #e9ecf1; border-radius: 9px; padding: 2px; margin-bottom: 8px; }
+  #modes label { flex: 1; text-align: center; padding: 5px 4px; border-radius: 7px; font-weight: 600; font-size: 12.5px; color: #555; }
+  #modes label:has(input:checked) { background: #fff; color: #111; box-shadow: 0 1px 3px #0003; }
+  #modes input { display: none; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+  .row > span { flex: none; font-weight: 600; font-size: 12px; color: #444; }
+  #ctl input[type=datetime-local], #ctl input[type=text] { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; }
+  #ctl button { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid #c9ced6; border-radius: 6px; background: #f6f7f9; cursor: pointer; }
+  #ctl button:hover { background: #e9ecf1; }
+  #legend { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e6eb; }
+  .bar { display: flex; gap: 2px; margin: 5px 0; font-size: 11px; color: #fff; text-align: center; }
+  .bar span { flex: 1; padding: 3px 1px; border-radius: 4px; text-shadow: 0 0 2px #0008; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #333; white-space: nowrap; }
+  .chip i { display: inline-block; width: 18px; height: 9px; border-radius: 3px; }
+  .locdot { background: none; border: 0; }
+  .locdot b { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #2784F5; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px #0007; }
+  .locdot i { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #2784F566; animation: locpulse 2s ease-out infinite; }
+  @keyframes locpulse { from { transform: scale(0.6); opacity: 1; } to { transform: scale(3); opacity: 0; } }
+  #msg { font-size: 12px; color: #b3001b; min-height: 0; }
+  #more { margin-top: 6px; border-top: 1px solid #e3e6eb; padding-top: 4px; }
+  #more summary { cursor: pointer; font-size: 11.5px; color: #666; }
+  #status { font-size: 11.5px; color: #555; margin-top: 4px; }
+  #timing { font-size: 11px; color: #777; }
+  .gray { background: #9a9a9a; height: 3px !important; }
+  .mtr { background: #2784F5; height: 5px !important; }
+  .small { font-size: 11px; color: #555; }
+  .leaflet-popup-content { font-size: 12px; max-height: 260px; overflow: auto; }
+  .leaflet-popup-content .s { color: #444; margin: 2px 0; }
+  .lbl { pointer-events: none; }
+  .lbl span { position: absolute; left: 0; top: 0; white-space: nowrap; font: 600 11px/1 -apple-system, system-ui, sans-serif; color: #222; letter-spacing: .3px;
+              text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff, 0 0 2px #fff; }
+  .lbl.arrow span { font-size: 15px; color: #444; }
+  .hicon { background: none; border: 0; }
+  .hicon svg { display: block; }
+  .hyl svg { vertical-align: middle; }
+  .hdot { background: #d00000; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 1px #0008; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="ctl">
+  <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime status</label></div>
+  <div class="row" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><button id="goTime">Go</button><button id="nowBtn">Now</button></div>
+  <div class="row"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
+  <div id="msg"></div>
+  <div id="legend">
+   <div id="legendNow" style="display:none">
+    <div class="small">Status at the chosen time (follows the clock until you pick a time; Now resumes)</div>
+    <div class="bar"><span style="background:#2e9e3f">open now</span><span style="background:#FFF200;color:#222;text-shadow:none">opens &le; 1h</span><span style="background:#f57c00">expires</span><span style="background:#7e3fc0">opens &gt; 1h</span><span style="background:#b3001b">never</span></div>
+    <div class="small">Yellow stripes = meter switches off within 1h.</div>
+   </div>
+   <div id="legendPlan">
+    <div class="small">How long you can legally stay from your arrival time</div>
+    <div class="bar"><span style="background:#b3001b">never</span><span style="background:#7e3fc0">opens later</span><span style="background:#f57c00">by midnight</span><span style="background:linear-gradient(to right,#FFF200,hsl(57,100%,40%));color:#222;text-shadow:none">tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2d</span><span style="background:hsl(120,68%,40%)">4d</span><span style="background:hsl(135,70%,26%)">7 days</span></div>
+   </div>
+   <div class="chips"><span class="chip"><i class="mtr"></i>metered</span><span class="chip"><i class="gray"></i>no data</span><span class="chip"><span class="hyl" id="legendHydrant"></span>hydrant 15 ft</span></div>
+  </div>
+  <details id="more"><summary>Details</summary>
+    <div class="row"><span title="Dates when DSNY suspended alternate side parking (broom signs ignored)">ASP suspended</span><input type="text" id="susp" placeholder="2026-11-26, 2026-12-25"></div>
+    <div id="status">Loading…</div>
+    <div id="timing"></div>
+  </details>
+  <div id="zoomInfo" class="small"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
+<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"></script>
+<script src="core.js"></script>
+<script src="signs.js"></script>
+<!-- NYC data cut into small tiles (made by bake-tiles.py); the page loads only the tiles in view. If missing, the page queries NYC live (slow). -->
+<script src="tiles/index.js" onerror="console.log('no tile index; will query NYC live')"></script>
+<script>
+const C = ParkCore;
+// NY State Plane Long Island (US feet): the CRS used by sign_x_coord / sign_y_coord
+proj4.defs('EPSG:2263', '+proj=lcc +lat_1=41.03333333333333 +lat_2=40.66666666666666 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000.0000000001 +y_0=0 +datum=NAD83 +units=us-ft +no_defs');
+const toSP = (lat, lng) => proj4('EPSG:4326', 'EPSG:2263', [lng, lat]);
+const toLL = (x, y) => { const [lng, lat] = proj4('EPSG:2263', 'EPSG:4326', [x, y]); return [lat, lng]; };
+
+const SIGNS_URL = 'https://data.cityofnewyork.us/resource/nfid-uabd.json';
+const STREETS_URL = 'https://data.cityofnewyork.us/resource/inkn-q76z.json';  // NYC Street Centerline (CSCL)
+const HYDRANT_URL = 'https://data.cityofnewyork.us/resource/5bgh-vtsn.json';
+const OFFSET_FT = 14;      // draw lines this far from the street centerline
+const CHUNK_FT = 20;       // lines are split into pieces this long
+const CORNER_PAD_FT = 4;   // extra gap at intersections, beyond half the cross street's width
+const HYDRANT_FT = 15;     // NY VTL 1202: no stopping/standing/parking within 15 ft of a hydrant (NYC rule text not yet verified)
+const MAX_ASSIGN_FT = 220; // a street piece must be this close to a sign to use it
+const STRETCH_FT = 35;     // reach of a local rule (bus stop, no standing) around a lone sign
+const GAP_FT = 150;        // a curb piece may sit this far beyond a block's first/last sign and still belong to it
+const LATERAL_FT = 70;     // ...and this far sideways from the line through the block's signs
+const STRETCH_END_FT = 12; // reach past the end signs of a zone that has two or more signs
+const BOROUGH = { 1: 'Manhattan', 2: 'Bronx', 3: 'Brooklyn', 4: 'Queens', 5: 'Staten Island' };
+
+const map = L.map('map', { preferCanvas: true, minZoom: 12, maxZoom: 20, zoomControl: false }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
+// Base map: OpenFreeMap Bright (vector tiles, sharp at any zoom, no key), trimmed (see basemap-lab.html).
+// OWN_LABELS draws street names + one-way arrows from NYC centerline data; leave off while the base map already shows them.
+const OWN_LABELS = false;
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+// Transit icons (bus stops etc.) drawn above the colored lines: a second, transit-only copy of the Bright style in its own pane
+// (between the lines at 400 and the hydrants at 640). Set TRANSIT_ON_TOP = false to leave them under the lines with the rest of the base map.
+const TRANSIT_ON_TOP = true, BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
+const transitPane = map.createPane('transit'); transitPane.style.zIndex = 635; transitPane.style.pointerEvents = 'none';
+const baseGL = L.maplibreGL({ style: BRIGHT, attribution: '&copy; OpenFreeMap, OpenMapTiles, &copy; OpenStreetMap' }).addTo(map);
+const BASE_HIDE = ['poi_r1', 'poi_r7', 'poi_r20'];                 // the only point of interest kept is poi_transit (bus, rail, airport icons)
+const BASE_COLORS = { 'highway-path': '#d3d3d3' };                 // paths: light gray
+function styleBase() {
+  const g = baseGL.getMaplibreMap();
+  for (const id of BASE_HIDE) if (g.getLayer(id)) g.setLayoutProperty(id, 'visibility', 'none');
+  if (g.getLayer('poi_transit')) { g.setLayoutProperty('poi_transit', 'text-field', '');   // icons only, no stop names
+    if (TRANSIT_ON_TOP) g.setLayoutProperty('poi_transit', 'visibility', 'none'); }          // ...drawn by the layer above the curb lines instead
+  for (const [id, c] of Object.entries(BASE_COLORS)) if (g.getLayer(id)) g.setPaintProperty(id, 'line-color', c);
+}
+{ const g = baseGL.getMaplibreMap(); if (g.isStyleLoaded()) styleBase(); else g.once('load', styleBase); }
+if (TRANSIT_ON_TOP) fetch(BRIGHT).then(r => r.json()).then(st => {
+  st.layers = st.layers.filter(l => l.id === 'poi_transit');
+  for (const l of st.layers) l.layout['text-field'] = '';
+  L.maplibreGL({ style: st, pane: 'transit' }).addTo(map);
+}).catch(() => { const g = baseGL.getMaplibreMap(); const show = () => g.getLayer('poi_transit') && g.setLayoutProperty('poi_transit', 'visibility', 'visible'); g.isStyleLoaded() ? show() : g.once('load', show); });
+map.createPane('hydrants').style.zIndex = 640;   // above the colored lines (overlay 400) and ordinary markers (600)
+let layer = L.layerGroup().addTo(map);          // colored curb lines (draw() swaps in a fresh group each time)
+const hydrantLayer = L.layerGroup().addTo(map); // fire-helmet hydrant icons
+const labelLayer = L.layerGroup().addTo(map);   // street names + one-way arrows (off by default)
+
+// Fire hydrant icon: one flat red silhouette (dome cap, body, two side nozzles, base) with a white outline for contrast
+const HYDRANT_SHAPES = `<rect x="14.4" y="1.8" width="3.2" height="3.6" rx="1"/><path d="M9.5 11 Q9.5 4.5 16 4.5 Q22.5 4.5 22.5 11 Z"/>
+  <rect x="10.5" y="10.5" width="11" height="15"/><rect x="4.5" y="13.5" width="7" height="5.5" rx="1.2"/><rect x="20.5" y="13.5" width="7" height="5.5" rx="1.2"/>
+  <rect x="8" y="24.5" width="16" height="4.8" rx="1.2"/>`;
+const HYDRANT_SVG = (px) => `<svg viewBox="0 0 32 32" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg">
+  <g fill="#fff" stroke="#fff" stroke-width="3.2" stroke-linejoin="round">${HYDRANT_SHAPES}</g><g fill="#d00000">${HYDRANT_SHAPES}</g></svg>`;
+document.getElementById('legendHydrant').innerHTML = HYDRANT_SVG(14);
+
+SignRender.install();
+const whenEl = document.getElementById('when'), suspEl = document.getElementById('susp');
+const statusEl = document.getElementById('status'), timingEl = document.getElementById('timing');
+function setNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); whenEl.value = d.toISOString().slice(0, 16); }
+setNow();
+document.getElementById('nowBtn').onclick = () => { pinned = false; setNow(); draw(); };
+// Go: the time box already applies on change; this button is the explicit "apply" for people who expect one. A time that differs from now pins it.
+document.getElementById('goTime').onclick = () => {
+  const keep = whenEl.value; setNow(); const nowStr = whenEl.value; whenEl.value = keep;
+  if (keep !== nowStr) pinned = true;
+  whenEl.blur(); draw();
+};
+// Two views: "plan" = how long can I stay if I arrive at the chosen time; "now" = live, next-hour view.
+const modeEls = document.querySelectorAll('input[name=mode]');
+const getMode = () => document.querySelector('input[name=mode]:checked').value;
+let pinned = false;     // realtime status: true once the user picks a time; false = follow the clock
+const getStart = () => getMode() === 'now' && !pinned ? new Date() : new Date(whenEl.value);
+function applyMode() {
+  const now = getMode() === 'now';
+    document.getElementById('legendNow').style.display = now ? '' : 'none';
+  document.getElementById('legendPlan').style.display = now ? 'none' : '';
+  if (now) { pinned = false; setNow(); }
+  draw();
+}
+modeEls.forEach(e => e.onchange = applyMode);
+setInterval(() => { if (getMode() === 'now' && !pinned) { setNow(); draw(); } }, 60000);
+whenEl.onchange = () => { pinned = true; draw(); };
+suspEl.onchange = () => draw();
+
+// ---------- small geometry helpers ----------
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+function distToSeg(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
+  const t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)) : 0;
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+// Spatial grid so "what is near this point" does not scan every item.
+function makeGrid(items, cell) {
+  const cells = new Map();
+  for (const it of items) { const k = Math.floor(it.x / cell) + ',' + Math.floor(it.y / cell); let a = cells.get(k); if (!a) cells.set(k, a = []); a.push(it); }
+  return { cells, cell };
+}
+function nearItems(grid, x, y, r, fn) {
+  const c = grid.cell;
+  for (let i = Math.floor((x - r) / c); i <= Math.floor((x + r) / c); i++)
+    for (let j = Math.floor((y - r) / c); j <= Math.floor((y + r) / c); j++) {
+      const a = grid.cells.get(i + ',' + j); if (a) for (const it of a) fn(it);
+    }
+}
+
+// ---------- data state ----------
+let faces = new Map();    // faceKey -> {street, side, from, to, base:[parsed], groups: Map(orderKey -> {signs:[parsed], pts:[[x,y]]})}
+let signGrid = null;      // grid of {key, ik, x, y}, ik = "NORMSTREET|SIDE"
+let chunks = [];          // [{a:[x,y], b:[x,y], mid:[x,y], faceKey|null, name, hydrant}]
+let hydrantData = [];     // [{lat, lng, x, y, id}]
+let hydrantGrid = null;
+let chunkGrid = null;
+let faceIdx = new Map();    // "NORMSTREET|SIDE" -> block sides that have a sign path
+let faceChunks = new Map(); // faceKey -> curb pieces on that block side      // grid of curb pieces, for picking the one nearest a click
+let loadedBounds = null, loading = false, loadId = 0, drawnZoom = null;
+
+// The build steps below are generators: they `yield` every so often, and drive() (in the loading section) lets the browser
+// handle map pan/zoom between slices. Outside a browser (build-check.js) they are simply run to the end.
+const parseMemo = new Map();
+function* ingestSigns(rows) {
+  faces = new Map();
+  const pts = [];
+  let ri = 0;
+  for (const r of rows) {
+    if ((++ri & 255) === 0) yield;
+    if (!r.sign_x_coord || !r.side_of_street) continue;
+    const key = [r.on_street, r.side_of_street, r.from_street, r.to_street].join('|');
+    let p = parseMemo.get(r.sign_description); if (!p) parseMemo.set(r.sign_description, p = C.parseSign(r.sign_description));   // few distinct texts (about 600 per 25k signs)
+    const x = +r.sign_x_coord, y = +r.sign_y_coord;
+    let f = faces.get(key);
+    if (!f) faces.set(key, f = { street: r.on_street, side: r.side_of_street, from: r.from_street, to: r.to_street, base: [], groups: new Map(), key, zs: [], path: null, ik: C.normStreet(r.on_street) + '|' + r.side_of_street });
+    pts.push({ key, ik: C.normStreet(r.on_street) + '|' + r.side_of_street, x, y });
+    if (p.kind === 'other') continue;
+    f.zs.push({ p, x, y, arrow: r.arrow_direction || null, d: r.distance_from_intersection == null || r.distance_from_intersection === '' ? NaN : +r.distance_from_intersection });
+    if (p.stretch) {
+      const gk = r.order_number;
+      let g = f.groups.get(gk); if (!g) f.groups.set(gk, g = { signs: [], pts: [] });
+      g.signs.push(p); g.pts.push([x, y]);
+    } else f.base.push(p);
+  }
+  signGrid = makeGrid(pts, MAX_ASSIGN_FT);
+  faceIdx = new Map();
+  let fi = 0;
+  for (const f of faces.values()) { if ((++fi & 63) === 0) yield; fitFace(f); if (f.path) { let a = faceIdx.get(f.ik); if (!a) faceIdx.set(f.ik, a = []); a.push(f); } }
+  // fallback for block sides that cannot be fitted: hull of each local rule = the two farthest-apart signs of the same order
+  for (const f of faces.values()) for (const g of f.groups.values()) {
+    let best = [g.pts[0], g.pts[0]], bd = -1;
+    for (const a of g.pts) for (const b of g.pts) { const d = dist(a, b); if (d > bd) { bd = d; best = [a, b]; } }
+    g.hull = best; g.hullLen = bd;
+  }
+}
+
+// ---------- sign zones ----------
+// Each sign's arrow points along the street; the rule it carries covers the stretch from its pole to the next pole in
+// that direction (checked against the real signs on Parade Place: street cleaning and no-standing arrows tile the block).
+// distance_from_intersection (d) is measured from the block's "from" street. The poles, in order of d, form a path along
+// the block (so curved blocks work). Any point near that path gets a d value by interpolating between neighboring poles.
+const ARROW_VEC = { North: [0, 1], South: [0, -1], East: [1, 0], West: [-1, 0] };
+// Turn signs (with d and arrow) into zones [lo, hi] along the block. dirOf(d) = unit vector of increasing d at that distance.
+function makeZones(f, zs, dirOf) {
+  const poles = [...new Set(zs.map(z => Math.round(z.d)))].sort((a, b) => a - b);
+  for (const z of zs) {
+    const v = dirOf(z.d), a = ARROW_VEC[z.arrow], dot = a && v ? a[0] * v[0] + a[1] * v[1] : 0;
+    const dir = Math.abs(dot) < 0.35 ? 0 : dot > 0 ? 1 : -1;      // +1 = toward larger d, 0 = both ways / no arrow
+    const next = poles.find(q => q > z.d + 1), prev = [...poles].reverse().find(q => q < z.d - 1);
+    z.lo = dir === 1 ? z.d : prev === undefined ? -Infinity : prev;
+    z.hi = dir === -1 ? z.d : next === undefined ? Infinity : next;
+  }
+  f.zs = zs; f.zoned = true;
+}
+
+// Backup method for blocks whose street topology cannot be resolved: a path through the sign poles themselves.
+function fitFace(f) {
+  const zs = f.zs.filter(z => isFinite(z.d));
+  if (zs.length < 2) return;
+  const byD = new Map();
+  for (const z of zs) { const k = Math.round(z.d); let a = byD.get(k); if (!a) byD.set(k, a = []); a.push(z); }
+  const poles = [...byD].map(([d, a]) => ({ d, x: a.reduce((t, z) => t + z.x, 0) / a.length, y: a.reduce((t, z) => t + z.y, 0) / a.length })).sort((p, q) => p.d - q.d);
+  if (poles.length < 2 || poles[poles.length - 1].d - poles[0].d < 40) return;
+  let walked = 0;
+  for (let i = 0; i + 1 < poles.length; i++) {      // neighboring poles should be about as far apart on the map as their distances say
+    const dd = poles[i + 1].d - poles[i].d, e = Math.hypot(poles[i + 1].x - poles[i].x, poles[i + 1].y - poles[i].y);
+    if (e > 1.6 * dd + 80 || e < 0.4 * dd - 80) return;
+    walked += e;
+  }
+  const span = poles[poles.length - 1].d - poles[0].d;
+  if (walked < 0.5 * span || walked > 1.6 * span) return;   // e.g. every sign recorded at one point: unusable
+  poles.forEach((p, i) => {                          // direction of increasing d at each pole
+    const a = poles[Math.max(0, i - 1)], b = poles[Math.min(poles.length - 1, i + 1)], L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    p.v = [(b.x - a.x) / L, (b.y - a.y) / L];
+  });
+  makeZones(f, zs, d => poles.reduce((best, p) => Math.abs(p.d - d) < Math.abs(best.d - d) ? p : best).v);
+  const xs = poles.map(p => p.x), ys = poles.map(p => p.y), m = GAP_FT + LATERAL_FT;
+  f.path = poles; f.dmin = poles[0].d; f.dmax = poles[poles.length - 1].d;
+  f.bbox = [Math.min(...xs) - m, Math.min(...ys) - m, Math.max(...xs) + m, Math.max(...ys) + m];
+}
+
+// Where is point p along a block side? {u: d value, lat: sideways distance from the pole path}. Beyond the end poles the
+// path is extended along its end segments.
+function locate(f, p) {
+  const P = f.path; let best = null;
+  for (let i = 0; i + 1 < P.length; i++) {
+    const a = P[i], b = P[i + 1], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy; if (!L2) continue;
+    const t = ((p[0] - a.x) * dx + (p[1] - a.y) * dy) / L2;
+    const tc = Math.max(i === 0 ? -Infinity : 0, Math.min(i === P.length - 2 ? Infinity : 1, t));
+    const lat = Math.hypot(p[0] - (a.x + dx * tc), p[1] - (a.y + dy * tc));
+    if (!best || lat < best.lat) best = { lat, u: a.d + (b.d - a.d) * tc };
+  }
+  return best;
+}
+
+// ---------- block topology ----------
+// A block side is named by the sign data: street, side, from-street, to-street. The street network says where that is:
+// find the nodes where the from/to cross streets meet this street, take the shortest path along the street between them,
+// and measure distance along it. Every curb piece on that path then has an exact d, and signs only need their d and arrow
+// (their recorded x/y can be junk: on Parkside Ave all 31 signs of one block share a single point).
+const nodeKey = p => Math.round(p[0] * 2) + '|' + Math.round(p[1] * 2);     // endpoints within ~0.5 ft are the same node
+let wayFaces = new Map();   // way -> [{f, forward, offset}]: block sides that run along this way
+
+function dirAt(path, d) {   // unit vector of increasing d at distance d along a resolved block
+  let pc = path.pieces.find(p => d <= p.offset + p.len) || path.pieces[path.pieces.length - 1];
+  const local = Math.max(0, Math.min(pc.len, pc.forward ? d - pc.offset : pc.len - (d - pc.offset))), cum = pc.way.cum;
+  let i = 1; while (i < cum.length - 1 && cum[i] < local) i++;
+  const a = pc.way.pts[i - 1], b = pc.way.pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, sgn = pc.forward ? 1 : -1;
+  return [sgn * (b[0] - a[0]) / L, sgn * (b[1] - a[1]) / L];
+}
+
+function shortestPath(list, nodeNames, fromNm, toNm) {
+  const adj = new Map(), add = (k, e) => { let a = adj.get(k); if (!a) adj.set(k, a = []); a.push(e); };
+  for (const w of list) { add(w.k0, { w, to: w.k1, forward: true }); add(w.k1, { w, to: w.k0, forward: false }); }
+  const dist = new Map(), prev = new Map(), done = new Set();
+  for (const k of adj.keys()) if (nodeNames.get(k).has(fromNm)) dist.set(k, 0);
+  if (!dist.size) return null;
+  for (;;) {
+    let cur = null, cd = Infinity;
+    for (const [k, d] of dist) if (!done.has(k) && d < cd) { cur = k; cd = d; }
+    if (cur === null) return null;
+    if (cd > 0 && nodeNames.get(cur).has(toNm)) {
+      const pieces = []; let k = cur;
+      while (prev.has(k)) { const e = prev.get(k); pieces.push({ way: e.w, forward: e.forward, len: e.w.len }); k = e.from; }
+      pieces.reverse(); let off = 0; for (const p of pieces) { p.offset = off; off += p.len; }
+      return { pieces, len: off };
+    }
+    done.add(cur);
+    for (const e of adj.get(cur)) {
+      const nd = cd + e.w.len;
+      if (!done.has(e.to) && (!dist.has(e.to) || nd < dist.get(e.to))) { dist.set(e.to, nd); prev.set(e.to, { w: e.w, forward: e.forward, from: cur }); }
+    }
+  }
+}
+
+// Where is point p along a resolved block? (for curb on a parallel roadway that the block's own path does not run along)
+function topoLocate(f, p) {
+  let best = null;
+  for (const pc of f.topo.pieces) {
+    const pts = pc.way.pts, cum = pc.way.cum;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (!L2) continue;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2));
+      const lat = Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dy * t));
+      if (!best || lat < best.lat) { const pos = cum[i] + t * Math.sqrt(L2); best = { lat, u: pc.offset + (pc.forward ? pos : pc.len - pos) }; }
+    }
+  }
+  return best;
+}
+
+function* resolveFaces(ways) {
+  wayFaces = new Map();
+  const nodeNames = new Map(), byName = new Map();
+  let wi = 0;
+  for (const w of ways) {
+    if ((++wi & 255) === 0) yield;
+    w.cum = [0]; for (let i = 1; i < w.pts.length; i++) w.cum.push(w.cum[i - 1] + dist(w.pts[i - 1], w.pts[i]));
+    w.len = w.cum[w.cum.length - 1]; w.k0 = nodeKey(w.pts[0]); w.k1 = nodeKey(w.pts[w.pts.length - 1]);
+    for (const k of [w.k0, w.k1]) { let st = nodeNames.get(k); if (!st) nodeNames.set(k, st = new Set()); st.add(w.nm); }
+    let a = byName.get(w.nm); if (!a) byName.set(w.nm, a = []); a.push(w);
+  }
+  let fj = 0;
+  for (const f of faces.values()) {
+    if ((++fj & 15) === 0) yield;
+    f.topo = null;
+    const zs = f.zs.filter(z => isFinite(z.d)), list = byName.get(C.normStreet(f.street));
+    if (!zs.length || !list) continue;
+    const path = shortestPath(list, nodeNames, C.normStreet(f.from), C.normStreet(f.to));
+    if (!path || Math.max(...zs.map(z => z.d)) > path.len + 150) continue;      // not found, or does not match the signs' distances
+    // which side of the direction of travel is this block side on? (compass letter of the side vs. left of the path)
+    const mid = [0.1, 0.3, 0.5, 0.7, 0.9].map(t => dirAt(path, t * path.len));
+    const letter = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] }[f.side];
+    if (!letter) continue;
+    const lean = mid.reduce((t, v) => t + (letter[0] * -v[1] + letter[1] * v[0]), 0);   // > 0: the side is to the left of travel
+    if (Math.abs(lean) < 0.2) continue;
+    f.topo = path; f.leftSide = lean > 0;
+    makeZones(f, zs, d => dirAt(path, d));
+    for (const pc of path.pieces) { let a = wayFaces.get(pc.way); if (!a) wayFaces.set(pc.way, a = []); a.push({ f, forward: pc.forward, offset: pc.offset }); }
+  }
+}
+
+function setHydrants(list) {
+  hydrantData = list;
+  hydrantGrid = makeGrid(list, 100);
+}
+
+// Hydrant no-parking spans on this curb piece, in ft along the piece from its start: [[lo, hi], ...]. Hydrants sit on the sidewalk,
+// behind the curb, so each one is treated as if it stood right on the curb: only its position along the street counts, not its
+// sideways offset. The span is exactly HYDRANT_FT either side of that spot (pieces are split at the span ends, so every
+// hydrant zone is the same length).
+function hydrantSpans(a, b, nx, ny, mid) {
+  const len = dist(a, b) || 1, tx = (b[0] - a[0]) / len, ty = (b[1] - a[1]) / len, spans = [];
+  nearItems(hydrantGrid, mid[0], mid[1], 60, h => {
+    const lateral = (h.x - a[0]) * nx + (h.y - a[1]) * ny + OFFSET_FT;  // distance from centerline toward this side
+    if (lateral <= 0 || lateral > 45) return;
+    const along = (h.x - a[0]) * tx + (h.y - a[1]) * ty;                // hydrant's spot along the piece, ft from its start
+    const lo = Math.max(0, along - HYDRANT_FT), hi = Math.min(len, along + HYDRANT_FT);
+    if (hi > lo) spans.push([lo, hi]);
+  });
+  spans.sort((p, q) => p[0] - q[0]);
+  const merged = [];
+  for (const sp of spans) { const l = merged[merged.length - 1]; if (l && sp[0] <= l[1] + 0.01) l[1] = Math.max(l[1], sp[1]); else merged.push([sp[0], sp[1]]); }
+  return merged;
+}
+
+// ---------- streets: trim lines so they stop at the cross street's curb ----------
+function trimPolyline(pts, a, b) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+  const total = cum[cum.length - 1];
+  if (total - a - b < 10) return null;                       // too short once the intersections are cut out
+  const at = d => {
+    let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
+    const t = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t];
+  };
+  const out = [at(a)];
+  for (let i = 1; i < pts.length - 1; i++) if (cum[i] > a && cum[i] < total - b) out.push(pts[i]);
+  out.push(at(total - b));
+  return out;
+}
+function* trimWays(ways) {
+  const key = p => Math.round(p[0] * 2) + '|' + Math.round(p[1] * 2);   // endpoints that coincide within ~0.5 ft are the same node
+  const ends = new Map();
+  for (const w of ways) for (const e of [w.pts[0], w.pts[w.pts.length - 1]]) {
+    const k = key(e); let a = ends.get(k); if (!a) ends.set(k, a = []); a.push(w);
+  }
+  let wi = 0;
+  for (const w of ways) {
+    if ((++wi & 255) === 0) yield;
+    // cut by half the widest *other* street that meets this end (the same street continuing is not an intersection)
+    const cut = e => { let t = 0; for (const o of ends.get(key(e))) if (o !== w && o.nm !== w.nm) t = Math.max(t, (o.width || 30) / 2); return t ? t + CORNER_PAD_FT : 0; };
+    const c0 = cut(w.pts[0]);
+    w.tpts = trimPolyline(w.pts, c0, cut(w.pts[w.pts.length - 1]));
+    w.trimA = c0;                                   // ft cut from the start (needed to place curb pieces along the original way)
+  }
+}
+
+let buildBox = null;   // [x0, y0, x1, y1] state-plane ft: only streets touching this box get curb pieces (the rest of the loaded data is context)
+function* buildChunks(ways) {
+  const out = [];
+  let wi = 0;
+  for (const w of ways) {
+    if ((++wi & 15) === 0) yield;
+    const pts = w.tpts; if (!pts) continue;
+    if (buildBox) {
+      let lx = Infinity, ly = Infinity, hx = -Infinity, hy = -Infinity;
+      for (const p of pts) { if (p[0] < lx) lx = p[0]; if (p[0] > hx) hx = p[0]; if (p[1] < ly) ly = p[1]; if (p[1] > hy) hy = p[1]; }
+      if (hx < buildBox[0] || lx > buildBox[2] || hy < buildBox[1] || ly > buildBox[3]) continue;
+    }
+    const wf = wayFaces.get(w);
+    let segStart = 0;                                         // ft along the trimmed line at the start of this segment
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+      const len = Math.hypot(x1 - x0, y1 - y0); if (len < 1) continue;
+      const dx = (x1 - x0) / len, dy = (y1 - y0) / len, segAt = segStart; segStart += len;
+      for (const s of [1, -1]) {
+        const nx = -dy * s, ny = dx * s;                  // normal pointing to this side
+        const wanted = new Set(C.cardinals(nx, ny).map(c => w.nm + '|' + c));
+        const n = Math.max(1, Math.round(len / CHUNK_FT));
+        for (let k = 0; k < n; k++) {
+          const t0 = k / n, t1 = (k + 1) / n;
+          const pt = t => [x0 + (x1 - x0) * t + nx * OFFSET_FT, y0 + (y1 - y0) * t + ny * OFFSET_FT];
+          const a = pt(t0), b = pt(t1), mid = pt((t0 + t1) / 2);
+          let faceKey = null, u, bestScore = Infinity;
+          if (wf) for (const e of wf) {                                                // block sides resolved from the street network
+            if (((e.forward ? s : -s) === 1) !== e.f.leftSide) continue;               // wrong side of the street for this block side
+            const pos = (w.trimA || 0) + segAt + ((t0 + t1) / 2) * len;                 // ft along the original way
+            faceKey = e.f.key; u = e.offset + (e.forward ? pos : w.len - pos); break;
+          }
+          if (!faceKey)
+          for (const ik of wanted) for (const f of faceIdx.get(ik) || []) {           // backup: block sides traced through their sign poles
+            if (f.topo) continue;
+            if (mid[0] < f.bbox[0] || mid[0] > f.bbox[2] || mid[1] < f.bbox[1] || mid[1] > f.bbox[3]) continue;
+            const loc = locate(f, mid); if (!loc || loc.lat > LATERAL_FT) continue;
+            const outside = Math.max(0, f.dmin - loc.u, loc.u - f.dmax); if (outside > GAP_FT) continue;
+            const score = outside * 2 + loc.lat;
+            if (score < bestScore) { bestScore = score; faceKey = f.key; u = loc.u; }
+          }
+          if (!faceKey) {                                                              // safety net: nearest sign of this street and side
+            let bd = MAX_ASSIGN_FT;
+            nearItems(signGrid, mid[0], mid[1], MAX_ASSIGN_FT, c => {
+              if (!wanted.has(c.ik)) return;
+              const d = Math.hypot(mid[0] - c.x, mid[1] - c.y); if (d < bd) { bd = d; faceKey = c.key; }
+            });
+            const ff = faceKey && faces.get(faceKey);                                  // e.g. a parallel roadway: still place it along the block
+            const loc = ff && (ff.topo ? topoLocate(ff, mid) : ff.path ? locate(ff, mid) : null);
+            if (loc && loc.lat <= 150) u = loc.u;
+          }
+          // split the piece at the hydrant span ends so the dark-red zone is exactly HYDRANT_FT either side of each hydrant
+          const L0 = dist(a, b) || 1, spans = hydrantSpans(a, b, nx, ny, mid), cuts = [0];
+          for (const [lo, hi] of spans) cuts.push(lo, hi);
+          cuts.push(L0);
+          const tAt = f => f <= 0 ? t0 : f >= L0 ? t1 : t0 + (t1 - t0) * f / L0;
+          for (let c = 0; c + 1 < cuts.length; c++) {
+            const f0 = cuts[c], f1 = cuts[c + 1]; if (f1 - f0 < 0.3) continue;
+            const sa = pt(tAt(f0)), sb = pt(tAt(f1)), sm = pt(tAt((f0 + f1) / 2));
+            out.push({ a: sa, b: sb, mid: sm, faceKey, u, name: w.name, side: s, nx, ny, hydrant: spans.some(([lo, hi]) => f0 >= lo - 0.01 && f1 <= hi + 0.01) });
+          }
+        }
+      }
+    }
+  }
+  chunks = out;
+  chunkGrid = makeGrid(chunks.map(ch => ({ x: ch.mid[0], y: ch.mid[1], ch })), 60);
+  faceChunks = new Map();
+  for (const ch of chunks) if (ch.faceKey) { let a = faceChunks.get(ch.faceKey); if (!a) faceChunks.set(ch.faceKey, a = []); a.push(ch); }
+}
+
+// The curb piece nearest a click (x, y in state plane ft), within tol ft, or null.
+function pickChunk(x, y, tol) {
+  let best = null, bd = tol;
+  nearItems(chunkGrid, x, y, tol + CHUNK_FT, it => { const d = distToSeg([x, y], it.ch.a, it.ch.b); if (d < bd) { bd = d; best = it.ch; } });
+  return best;
+}
+
+// ---------- street names + one-way arrows (off unless OWN_LABELS) ----------
+function buildLabels(ways) {
+  labelLayer.clearLayers();
+  const placed = [];   // [x, y, kind, name]
+  const tooClose = (p, kind, name, ft) => placed.some(q => q[2] === kind && (kind === 'arrow' || q[3] === name) && dist(p, q) < ft);
+  const icon = (cls, text, deg) => L.divIcon({ className: 'lbl ' + cls, iconSize: [0, 0],
+    html: `<span style="transform:translate(-50%,-50%) rotate(${deg}deg)">${text}</span>` });
+  for (const w of ways) {
+    const dirSign = w.oneway === '-1' ? -1 : w.oneway === 'yes' ? 1 : 0;
+    let best = null;
+    for (let i = 0; i + 1 < w.pts.length; i++) { const len = dist(w.pts[i], w.pts[i + 1]); if (!best || len > best.len) best = { i, len }; }
+    if (!best) continue;
+    const seg = (i, t) => { const [a, b] = [w.pts[i], w.pts[i + 1]]; return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], ang: -Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI }; };
+    if (best.len >= 80) {
+      const { p, ang } = seg(best.i, 0.5);
+      if (!tooClose(p, 'name', w.name, 300)) {
+        const flipped = ang > 90 || ang < -90, deg = flipped ? ang + (ang > 0 ? -180 : 180) : ang;
+        const glyph = dirSign ? ((dirSign > 0) !== flipped ? ' →' : ' ←') : '';
+        L.marker(toLL(...p), { icon: icon('name', w.name.toUpperCase() + glyph, deg), interactive: false }).addTo(labelLayer);
+        placed.push([p[0], p[1], 'name', w.name]);
+      }
+    }
+    if (dirSign) for (let i = 0; i + 1 < w.pts.length; i++) {
+      const len = dist(w.pts[i], w.pts[i + 1]); if (len < 60) continue;
+      const { p, ang } = seg(i, 0.5);
+      if (tooClose(p, 'arrow', '', 140) || placed.some(q => q[2] === 'name' && dist(p, q) < 90)) continue;
+      L.marker(toLL(...p), { icon: icon('arrow', '▶', dirSign > 0 ? ang : ang + 180), interactive: false }).addTo(labelLayer);
+      placed.push([p[0], p[1], 'arrow', '']);
+    }
+  }
+}
+
+// ---------- evaluation + drawing ----------
+function parseSuspended() { return new Set(suspEl.value.split(/[ ,]+/).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))); }
+
+function evalChunk(ch, start, opts, memo) {
+  if (ch.hydrant) {
+    const under = ch.faceKey ? evalChunkSigns(ch, start, opts, memo) : null;
+    return { res: { min: 0, never: true, metered: false }, parsed: under ? under.parsed : [], hydrant: true };
+  }
+  return ch.faceKey ? evalChunkSigns(ch, start, opts, memo) : null;
+}
+
+// Does a local rule (bus stop, no standing...) cover this curb piece? Signs sit on the sidewalk, a few feet sideways from
+// the curb, so a zone with 2+ signs is measured ALONG the street between its end signs (sideways offset ignored).
+function inZone(mid, g) {
+  const [h0, h1] = g.hull, dx = h1[0] - h0[0], dy = h1[1] - h0[1], L = Math.hypot(dx, dy);
+  if (g.hullLen <= 20) return distToSeg(mid, h0, h1) <= STRETCH_FT;           // a lone sign: a circle around it
+  const u = ((mid[0] - h0[0]) * dx + (mid[1] - h0[1]) * dy) / L;             // position along the zone, ft from the first end sign
+  const side = Math.abs((mid[0] - h0[0]) * dy - (mid[1] - h0[1]) * dx) / L;  // sideways distance from the zone's line
+  return side <= 60 && u >= -STRETCH_END_FT && u <= L + STRETCH_END_FT;
+}
+
+const ASP_FILL_FT = 250;
+const ZONE_TOL_FT = 6;   // slack around zone ends (a curb piece is 20 ft long)
+function evalChunkSigns(ch, start, opts, memo) {
+  const f = faces.get(ch.faceKey);
+  if (f.zoned && ch.u !== undefined) {
+    const u = ch.u, idx = [];
+    f.zs.forEach((z, i) => { if (u >= z.lo - ZONE_TOL_FT && u <= z.hi + ZONE_TOL_FT) idx.push(i); });
+    // Street cleaning covers a whole block side in practice. If the last pole sits short of the corner, no zone reaches
+    // the end of the curb and it would read "7 days"; give such a stretch the nearest street-cleaning zone (within 250 ft).
+    if (!idx.some(i => f.zs[i].p.asp)) {
+      let best = -1, bd = ASP_FILL_FT;
+      f.zs.forEach((z, i) => { if (z.p.asp) { const d = u < z.lo ? z.lo - u : u > z.hi ? u - z.hi : 0; if (d <= bd) { bd = d; best = i; } } });
+      if (best >= 0) idx.push(best);
+    }
+    const mk = ch.faceKey + '#z' + idx.join(',');
+    let hit = memo.get(mk);
+    if (!hit) { const parsed = idx.map(i => f.zs[i].p); memo.set(mk, hit = { res: C.stay(parsed, start, opts), parsed }); }
+    return hit;
+  }
+  const near = f.groups.size ? [...f.groups.entries()].filter(([, g]) => inZone(ch.mid, g)) : [];
+  const mk = ch.faceKey + '#' + near.map(([k]) => k).sort().join(',');
+  let hit = memo.get(mk);
+  if (!hit) {
+    const parsed = near.length ? f.base.concat(near.flatMap(([, g]) => g.signs)) : f.base;
+    memo.set(mk, hit = { res: C.stay(parsed, start, opts), parsed });
+  }
+  return hit;
+}
+
+const METER_BLUE = '#2784F5';   // metered curb: this blue line with the status color dashed on top (dash size is in screen pixels, so it stays the same at every zoom)
+
+// Time slicing: long jobs hand control back to the browser every ~8 ms so the map keeps panning and zooming smoothly.
+let sliceT = 0;
+const yieldNow = () => (window.scheduler && scheduler.yield) ? scheduler.yield() : new Promise(r => setTimeout(r, 0));
+async function drive(gen) {      // run a generator-based build step in slices
+  sliceT = performance.now();
+  for (;;) {
+    const r = gen.next();
+    if (r.done) return r.value;
+    if (performance.now() - sliceT > 8) { await yieldNow(); sliceT = performance.now(); }
+  }
+}
+let drawSeq = 0, building = false, redrawAfter = false;
+const llOf = p => p.ll || (p.ll = toLL(p[0], p[1]));   // projecting back to lat/lng is slow: do it once per point
+
+// Draws into a fresh layer group and swaps it in when finished, so the old lines stay on screen meanwhile. A newer draw() cancels this one.
+async function draw() {
+  if (building) { redrawAfter = true; return; }
+  const my = ++drawSeq, t0 = performance.now();
+  drawnZoom = map.getZoom();
+  if (!chunks.length) { layer.clearLayers(); return; }
+  const nl = L.layerGroup();
+  const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), nowMode = getMode() === 'now';
+  const z = map.getZoom(), weight = z >= 18 ? 8 : z >= 17 ? 6 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+  let nodata = 0, run = null;
+  const flush = () => {
+    if (!run) return;
+    const ll = run.pts.map(llOf), { metered, ...st } = run.style;
+    // clicks are handled by map.on('click') below, so these shapes are not interactive
+    // metered = alternating stripes: a solid steel-blue line underneath, the status color dashed on top
+    if (metered) L.polyline(ll, { color: METER_BLUE, weight: st.weight, opacity: 1, lineCap: 'butt', interactive: false }).addTo(nl);
+    L.polyline(ll, { ...st, dashArray: metered ? '8 8' : null, interactive: false }).addTo(nl);
+    run = null;
+  };
+  // Neighboring curb pieces with the same look and the same block face are drawn as one line.
+  let ci = 0;
+  for (const ch of chunks) {
+    if ((++ci & 127) === 0 && performance.now() - sliceT > 8) {
+      await yieldNow(); sliceT = performance.now();
+      if (my !== drawSeq || building) return;           // superseded by a newer draw or a data reload
+    }
+    const ev = evalChunk(ch, start, opts, memo);
+    let style, key;
+    if (!ev) { nodata++; style = { color: '#9a9a9a', weight: Math.max(3, weight - 1), opacity: 0.85 }; key = 'nodata'; }
+    else {
+      const r = ev.res;
+      const stripe = !!r.metered && z > 16;       // zoom 16 and wider: metered curb is just a blue line
+      style = { color: r.metered && !stripe ? METER_BLUE : nowMode ? C.colorNow(r) : C.colorFor(r.min, r.never, start), weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
+      key = [style.color, style.metered, ch.faceKey, ev.hydrant ? 'H' : '', ev.parsed.length].join('|');
+    }
+    const joins = run && run.key === key && run.last[0] === ch.a[0] && run.last[1] === ch.a[1];
+    if (!joins) { flush(); run = { key, pts: [ch.a], ch, ev, style }; }
+    run.pts.push(ch.b); run.last = ch.b;
+  }
+  flush();
+  if (my !== drawSeq || building) return;
+  map.addLayer(nl); map.removeLayer(layer); layer = nl;
+  statusEl.textContent = `${faces.size} block faces, ${hydrantData.length} hydrants, ${nodata} of ${chunks.length} curb pieces have no data`;
+  lastDrawMs = performance.now() - t0;
+}
+let lastDrawMs = 0;
+
+// Fire hydrant icons in view (small red dots when zoomed out, to keep the map fast).
+// Plain page elements, not canvas shapes: a second canvas layer would swallow clicks meant for the colored lines.
+function drawHydrants() {
+  hydrantLayer.clearLayers();
+  const z = map.getZoom();
+  if (z < 17) return;     // zoom 16 and out: hidden (hydrant curb still shows dark red)
+  const view = map.getBounds().pad(0.1);
+  const inView = hydrantData.filter(h => view.contains([h.lat, h.lng]));
+  // 17: tiny dots; 18: small icons; 19: larger icons
+  const px = z >= 19 ? 20 : 15, useIcons = z >= 18 && inView.length <= 700, ds = z >= 17 && !useIcons ? 5 : 8;
+  const hydrantIcon = L.divIcon({ className: 'hicon', iconSize: [px, px], html: HYDRANT_SVG(px) });
+  const dot = L.divIcon({ className: 'hdot', iconSize: [ds, ds] });
+  for (const h of inView) L.marker([h.lat, h.lng], { pane: 'hydrants', icon: useIcons ? hydrantIcon : dot, keyboard: false, bubblingMouseEvents: true })
+    .bindTooltip('Fire hydrant ' + (h.id || '')).addTo(hydrantLayer);
+}
+
+function nodataHtml(ch) {
+  return `<b>${ch.name}</b><br>No parking signs on file for this curb.<br><span class="small">Not the same as legal: the dataset may be missing signs, or the curb may be restricted another way. Check the street.</span>`;
+}
+
+// What the whole block side looks like, by length, so one spot's verdict is not read as the whole block's.
+function blockSummary(ch, ctx) {
+  const parts = new Map();
+  for (const c of faceChunks.get(ch.faceKey) || []) {
+    const ev = evalChunk(c, ctx.start, ctx.opts, ctx.memo); if (!ev) continue;
+    const label = ev.hydrant ? 'hydrant zones' : ev.res.never ? 'never legal' : ev.res.min === 0 ? 'not legal at that time' : 'can stay ' + C.fmt(ev.res.min);
+    parts.set(label, (parts.get(label) || 0) + dist(c.a, c.b));
+  }
+  if (parts.size < 2) return '';
+  return '<div class="small">This side of the block: ' + [...parts].sort((a, b) => b[1] - a[1]).map(([l, ft]) => `~${Math.round(ft / 10) * 10} ft ${l}`).join(' &middot; ') + '</div>';
+}
+
+// "Tue 12 AM" on the hour, "Tue 9:30 AM" otherwise
+function untilText(d) {
+  return d.toLocaleString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], d.getMinutes() ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric' });
+}
+function popupHtml(ch, ev, ctx) {
+  const f = faces.get(ch.faceKey) || { street: ch.name, side: '?', from: '', to: '' }, r = ev.res;
+  const verdict = ev.hydrant ? '<b style="color:#b3001b">Here: hydrant within 15 ft, no parking</b>'
+    : r.never ? '<b style="color:#b3001b">Here: never legal (per signs)</b>'
+    : r.min === 0 ? '<b style="color:#b3001b">Here: not legal at that time</b>' + (r.opens < C.CAP ? ` (legal in ${C.fmt(r.opens)})` : '')
+    : `<b>${C.fmt(r.min)} remaining</b>` + (r.capped ? '' : ` (until ${untilText(r.until)})`);
+  // one line per distinct rule (a block can have several identical signs)
+  // the signs themselves, drawn like the real ones (SignRender, signs.js); one per distinct sign text, parking rules only
+  const all = [...new Set(ev.parsed.map(p => SignRender.html(p.raw)))].join('');     // identical-looking signs shown once
+  return `<b>${f.street}</b>, ${f.side} side<br>${f.from} → ${f.to}<br>${verdict}${r.metered ? '<br>Metered: pay at the muni-meter' + (r.meterEnd < C.CAP ? ` (meter ends in ${C.fmt(r.meterEnd)})` : '') : ''}` +
+    `<br><span class="small">Signs applying at this spot:</span>${all}${blockSummary(ch, ctx)}` +
+    `<div class="small">Corners and crosswalks are not checked beyond the gap at intersections. The posted sign always wins.</div>`;
+}
+
+// ---------- loading ----------
+// Fetch JSON, retrying a few times (these free services sometimes return an error page), and name the source on failure.
+async function getJson(url, label, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const resp = await fetch(url);
+      const text = await resp.text();
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return JSON.parse(text);
+    } catch (e) {
+      if (i === tries - 1) throw new Error(label + ': ' + e.message);
+      await new Promise(res => setTimeout(res, 1500 * (i + 1)));
+    }
+  }
+}
+const secs = ms => (ms / 1000).toFixed(1) + 's';
+
+// Streets from either source -> {name, nm, width, oneway, pts (state plane ft)}
+function* makeWays(streets) {
+  // trafdir: FT = one-way along the line's digitized direction, TF = one-way against it, TW = two-way
+  const ways = []; let si = 0;
+  for (const s of streets) {
+    if ((++si & 63) === 0) yield;
+    for (const line of s.coords) ways.push({
+      name: s.name.replace(/\s+/g, ' '), nm: C.normStreet(s.name), width: s.width, oneway: s.trafdir === 'FT' ? 'yes' : s.trafdir === 'TF' ? '-1' : null,
+      pts: line.map(([lng, lat]) => toSP(lat, lng)) });
+  }
+  yield* aliasWays(ways);
+  return ways;
+}
+// Some streets have two names (the centerline says BUCKINGHAM RD, the sign records say EAST 16 STREET). A street with no
+// same-name signs beside it takes the name of the signs that line its curb (at least half of its length, 100 ft or longer).
+function* aliasWays(ways) {
+  let n = 0, wi = 0;
+  for (const w of ways) {
+    if ((++wi & 63) === 0) yield;
+    let len = 0; for (let i = 1; i < w.pts.length; i++) len += dist(w.pts[i - 1], w.pts[i]);
+    if (len < 100 || /EXPY|PKWY|HWY/.test(w.nm)) continue;     // expressway/parkway service roads are not co-named streets
+    const samples = Math.max(3, Math.round(len / 25)), tally = new Map(); let own = 0;
+    for (let k = 0; k < samples; k++) {
+      let d = (k + 0.5) / samples * len, i = 0;
+      while (i < w.pts.length - 2 && d > dist(w.pts[i], w.pts[i + 1])) { d -= dist(w.pts[i], w.pts[i + 1]); i++; }
+      const a = w.pts[i], b = w.pts[i + 1], l = dist(a, b) || 1, p = [a[0] + (b[0] - a[0]) * d / l, a[1] + (b[1] - a[1]) * d / l], here = new Set();
+      nearItems(signGrid, p[0], p[1], 40, it => { if (Math.hypot(it.x - p[0], it.y - p[1]) <= 40) here.add(it.ik.split('|')[0]); });
+      if (here.has(w.nm)) own++;
+      for (const nm of here) tally.set(nm, (tally.get(nm) || 0) + 1);
+    }
+    if (own) continue;
+    const [best, c] = [...tally].sort((x, y) => y[1] - x[1])[0] || [];
+    if (best && c >= samples / 2) { w.nm = best; w.alias = true; n++; }
+  }
+  return n;
+}
+// Tiles (bake-tiles.py): files tiles/<col>_<row>.js, each calling __tile(key, data). Loaded as scripts so this also works from file://.
+const MIN_LINE_ZOOM = 15;       // below this the page draws nothing (a citywide view would need hundreds of tiles)
+const tileCache = new Map(), tilePending = new Map();
+window.__tile = (key, data) => tileCache.set(key, data);
+function getTile(key) {
+  if (tileCache.has(key)) return Promise.resolve();
+  if (tilePending.has(key)) return tilePending.get(key);
+  const p = new Promise(res => {
+    const el = document.createElement('script');
+    el.src = `tiles/${key}.js`;
+    el.onload = el.onerror = () => { el.remove(); tilePending.delete(key); res(); };
+    document.head.appendChild(el);
+  });
+  tilePending.set(key, p);
+  return p;
+}
+// Tiles covering the state-plane box, plus a one-tile ring so blocks at the edge still have their cross streets and signs.
+// Only data within CONTEXT_FT of the box is kept: enough for blocks that run past the edge to still resolve, far less than the whole ring.
+const CONTEXT_FT = 2500;
+async function loadTiles(x0, y0, x1, y1, b) {
+  const sz = TILE_INDEX.size, keys = [];
+  const mx = CONTEXT_FT, dLat = CONTEXT_FT / 364000, dLng = CONTEXT_FT / 277000;      // ft -> degrees near NYC
+  const S = b.getSouth() - dLat, N = b.getNorth() + dLat, W = b.getWest() - dLng, E = b.getEast() + dLng;
+  const sx0 = x0 - mx, sx1 = x1 + mx, sy0 = y0 - mx, sy1 = y1 + mx;
+  for (let c = Math.floor(x0 / sz) - 1; c <= Math.floor(x1 / sz) + 1; c++)
+    for (let r = Math.floor(y0 / sz) - 1; r <= Math.floor(y1 / sz) + 1; r++)
+      if (TILE_INDEX.tiles[c + '_' + r]) keys.push(c + '_' + r);
+  await Promise.all(keys.map(getTile));
+  const streets = [], rows = [], hyd = [];
+  for (const k of keys) {
+    const t = tileCache.get(k); if (!t) continue;
+    for (const s of t.t) if (s[4].some(line => line.some(c => c[0] >= W && c[0] <= E && c[1] >= S && c[1] <= N)))
+      streets.push({ name: s[0], trafdir: s[1], width: s[3], coords: s[4] });
+    for (const r of t.s) if (r[6] >= sx0 && r[6] <= sx1 && r[7] >= sy0 && r[7] <= sy1)
+      rows.push({ order_number: r[0], on_street: r[1], side_of_street: r[2], from_street: r[3], to_street: r[4], sign_description: t.d[r[5]], sign_x_coord: r[6], sign_y_coord: r[7], arrow_direction: r[8], distance_from_intersection: r[9] });
+    for (const h of t.h) if (h[2] >= sx0 && h[2] <= sx1 && h[3] >= sy0 && h[3] <= sy1) hyd.push({ lat: h[0], lng: h[1], x: h[2], y: h[3], id: h[4] });
+  }
+  return { streets, rows, hyd, count: keys.length };
+}
+
+async function load() {
+  if (loading) return; loading = true;
+  const T0 = performance.now(), tm = {};
+  const b = map.getBounds().pad(0.25);
+  const myLoad = ++loadId;
+  let ok = false;
+  try {
+    const S = b.getSouth(), N = b.getNorth(), W = b.getWest(), E = b.getEast();
+    const corners = [[S, W], [N, W], [N, E], [S, E]].map(c => toSP(...c));
+    const x0 = Math.min(...corners.map(c => c[0])), x1 = Math.max(...corners.map(c => c[0]));
+    const y0 = Math.min(...corners.map(c => c[1])), y1 = Math.max(...corners.map(c => c[1]));
+    let streets, rows, hydNow = null, hydLater = null, source;
+
+    if (window.TILE_INDEX) {
+      // ---- instant path: tiles (local files or the published site) ----
+      source = `tiles from ${TILE_INDEX.created}`;
+      statusEl.textContent = 'Loading map data…';
+      let t = performance.now();
+      const td = await loadTiles(x0, y0, x1, y1, b);
+      streets = td.streets; rows = td.rows; hydNow = td.hyd;
+      buildBox = [x0, y0, x1, y1];
+      source += ` (${td.count} tiles)`;
+      tm.read = performance.now() - t;
+    } else {
+      // ---- slow path: ask NYC Open Data live ----
+      source = 'live NYC Open Data (slow)';
+      buildBox = null;
+      statusEl.textContent = 'Loading streets…';
+      const poly = `POLYGON((${W} ${S}, ${E} ${S}, ${E} ${N}, ${W} ${N}, ${W} ${S}))`;
+      let t = performance.now();
+      // Hydrants load in the background (slowest query); lines are drawn first and hydrants are added when ready.
+      hydLater = getJson(HYDRANT_URL + '?$limit=50000&$where=' + encodeURIComponent(`within_box(the_geom, ${S}, ${W}, ${N}, ${E})`), 'Hydrants (NYC Open Data)')
+        .then(a => a.filter(h => h.point_x).map(h => ({ lat: +h.latitude, lng: +h.longitude, x: +h.point_x, y: +h.point_y, id: h.unitid })))
+        .catch(e => { statusEl.textContent += ' ' + e.message + ' (hydrants skipped)'; return []; });
+      const osm = await getJson(STREETS_URL + '?$limit=50000&$select=full_street_name,trafdir,boroughcode,streetwidth,the_geom&$where=' +
+        encodeURIComponent(`rw_type in ('1','2','3') AND trafdir != 'NV' AND NOT(upper(full_street_name) like '%OPAS%' OR upper(full_street_name) like '%PEDESTRIAN%' OR upper(full_street_name) like '%PATH%' OR upper(full_street_name) like '%ARCHES%' OR upper(full_street_name) like '%BRG%' OR upper(full_street_name) like '%BRDG%') AND intersects(the_geom, '${poly}')`), 'Streets (NYC centerline)');
+      if (!Array.isArray(osm)) throw new Error('unexpected response');
+      tm.streets = performance.now() - t; t = performance.now();
+      statusEl.textContent = 'Loading signs…';
+      streets = osm.filter(s => s.the_geom && s.full_street_name).map(s => ({ name: s.full_street_name, trafdir: s.trafdir, width: +s.streetwidth || 0, coords: s.the_geom.coordinates }));
+      // The signs dataset has no geographic index (a box query scans every row), so narrow by borough first.
+      const boros = [...new Set(osm.map(s => BOROUGH[s.boroughcode]).filter(Boolean))];
+      const where = (boros.length ? `borough in (${boros.map(n => `'${n}'`).join(',')}) AND ` : '') +
+        `record_type='Current' AND sign_x_coord>=${x0} AND sign_x_coord<=${x1} AND sign_y_coord>=${y0} AND sign_y_coord<=${y1}`;
+      rows = await getJson(SIGNS_URL + '?$limit=50000&$select=order_number,on_street,side_of_street,from_street,to_street,sign_description,sign_x_coord,sign_y_coord,arrow_direction,distance_from_intersection&$where=' + encodeURIComponent(where), 'Signs (NYC Open Data)');
+      if (!Array.isArray(rows)) throw new Error('unexpected response');
+      tm.signs = performance.now() - t;
+    }
+
+    // The build changes the data that draw() and click read, so they wait (building = true); the old lines stay on screen meanwhile.
+    // Each step runs in slices (drive), so the map keeps responding.
+    building = true;
+    let t = performance.now();
+    await drive(ingestSigns(rows));
+    tm.parse = performance.now() - t; t = performance.now();
+    const ways = await drive(makeWays(streets));
+    await drive(trimWays(ways));
+    await drive(resolveFaces(ways));
+    setHydrants(hydNow || []);
+    await drive(buildChunks(ways));
+    tm.build = performance.now() - t;
+    if (OWN_LABELS) buildLabels(ways);
+    loadedBounds = b;
+    building = false;
+    redrawAfter = false;
+    drawHydrants();
+    await draw();
+    tm.draw = lastDrawMs;
+    const show = () => timingEl.textContent = `${source}: ${secs(performance.now() - T0)} total (` +
+      Object.entries(tm).map(([k, v]) => `${k} ${secs(v)}`).join(', ') + ')';
+    show();
+    loading = false;                       // the map is usable now
+
+    if (hydLater) {
+      const hyd = await hydLater;
+      if (myLoad !== loadId) return;       // user moved to a newer load meanwhile
+      t = performance.now();
+      building = true;
+      setHydrants(hyd);
+      await drive(buildChunks(ways));
+      building = false;
+      drawHydrants(); await draw();
+      tm.hydrants = performance.now() - t; show();
+    }
+    ok = true;
+  } catch (err) { building = false; statusEl.textContent = 'Load failed: ' + err.message; }
+  loading = false;
+  // The map may have moved while this load ran (moveend is ignored while loading): catch up.
+  if (ok && window.TILE_INDEX && map.getZoom() >= MIN_LINE_ZOOM && !loadedBounds.contains(map.getBounds())) load();
+}
+
+// Click anywhere near a curb line: show the rules for the nearest piece.
+map.on('click', e => {
+  if (building || !chunks.length || map.getZoom() < 13) return;
+  const [x, y] = toSP(e.latlng.lat, e.latlng.lng);
+  const ftPerPx = 156543.03 * Math.cos(e.latlng.lat * Math.PI / 180) / 2 ** map.getZoom() * 3.28084;
+  const ch = pickChunk(x, y, Math.max(12, ftPerPx * 12));     // about 12 screen pixels
+  if (!ch) return;
+  const ctx = { start: getStart(), opts: { suspended: parseSuspended() }, memo: new Map() }, ev = evalChunk(ch, ctx.start, ctx.opts, ctx.memo);
+  L.popup().setLatLng(e.latlng).setContent(ev ? popupHtml(ch, ev, ctx) : nodataHtml(ch)).openOn(map);
+});
+
+// Current location and address search (address lookup goes to OpenStreetMap's Nominatim service).
+const msgEl = document.getElementById('msg');
+let pin = null, accCircle = null;
+function showPin(ll, color, text, accuracy) {
+  if (pin) pin.remove(); if (accCircle) { accCircle.remove(); accCircle = null; }
+  if (accuracy) {        // current location: a locator dot (blue dot, pulsing ring, accuracy circle), not a pin
+    accCircle = L.circle(ll, { radius: Math.min(accuracy, 300), color: '#2784F5', weight: 1, fillColor: '#2784F5', fillOpacity: 0.12, interactive: false }).addTo(map);
+    pin = L.marker(ll, { icon: L.divIcon({ className: 'locdot', html: '<i></i><b></b>', iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(map);
+  } else pin = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(map).bindTooltip(text);
+  map.setView(ll, Math.max(map.getZoom(), 17));
+}
+document.getElementById('locBtn').onclick = () => {
+  msgEl.textContent = '';
+  if (!navigator.geolocation) { msgEl.textContent = 'This browser cannot share your location.'; return; }
+  msgEl.style.color = '#555'; msgEl.textContent = 'Finding you…';
+  navigator.geolocation.getCurrentPosition(pos => { msgEl.textContent = ''; showPin([pos.coords.latitude, pos.coords.longitude], '#2784F5', 'You are here', pos.coords.accuracy); },
+    err => { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Location failed: ' + err.message; }, { enableHighAccuracy: true, timeout: 15000 });
+};
+async function goAddress() {
+  const q0 = document.getElementById('addr').value.trim(); if (!q0) return;
+  const q = /new york|\bny\b|brooklyn|queens|bronx|manhattan|staten/i.test(q0) ? q0 : q0 + ', New York';
+  msgEl.style.color = '#555'; msgEl.textContent = 'Searching…';
+  try {
+    const r = await (await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-74.26,40.92,-73.70,40.49&q=' + encodeURIComponent(q))).json();
+    if (!r.length) { msgEl.style.color = '#b3001b'; msgEl.textContent = 'No match for that address.'; return; }
+    msgEl.textContent = ''; showPin([+r[0].lat, +r[0].lon], '#d81b60', r[0].display_name);
+  } catch (e) { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Address search failed: ' + e.message; }
+}
+document.getElementById('goBtn').onclick = goAddress;
+document.getElementById('addr').onkeydown = e => { if (e.key === 'Enter') goAddress(); };
+
+const zoomInfoEl = document.getElementById('zoomInfo');
+const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + map.getZoom(); };
+map.on('zoom', showZoom); showZoom();
+let timer;
+map.on('moveend', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const zNow = map.getZoom();
+    const minZ = window.TILE_INDEX ? MIN_LINE_ZOOM : 16;
+    if (zNow < minZ) { statusEl.textContent = 'Zoom in to see street lines.'; layer.clearLayers(); hydrantLayer.clearLayers(); drawnZoom = null; loadedBounds = null; return; }
+    if (!loadedBounds || !loadedBounds.contains(map.getBounds())) load();
+    else { if (map.getZoom() !== drawnZoom) draw(); drawHydrants(); }
+  }, 400);
+});
+load();
+</script>
+</body>
+</html>

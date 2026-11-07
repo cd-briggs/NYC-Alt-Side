@@ -1,0 +1,20 @@
+# Local backups (YY.MM.DD_BU_*), scratch and raw build data
+[0-9][0-9].[0-9][0-9].[0-9][0-9]_BU_*
+_bc-*
+build/
+*.log
+.DS_Store
+
+# Not published: personal notes, tests/fixtures, tools, unused data
+HANDOFF.md
+NOTES.md
+live-sample.json
+test-core.js
+run-tests.js
+perf.js
+build-check.js
+basemap-lab.html
+basemaps.html
+sign-preview.html
+bake-snapshot.py
+data/

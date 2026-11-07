@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#f4f1ea"/>
+  <!-- street sign: post + blue "P" plate -->
+  <rect x="50.5" y="12" width="3.5" height="46" fill="#555"/>
+  <rect x="40" y="5" width="24" height="22" rx="3" fill="#1565c0" stroke="#fff" stroke-width="2"/>
+  <text x="52" y="22.5" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="bold" text-anchor="middle" fill="#fff">P</text>
+  <!-- generic car, side view -->
+  <path d="M3 51 V43 Q3 39 7 38 L13 37 L19 31 Q20.5 29.5 23 29.5 H34 Q37 29.5 38.5 31.5 L43 37.5 Q47 38.5 47 42.5 V51 Z" fill="#c62828"/>
+  <path d="M21 32 H33.5 L37.5 37 H16 Z" fill="#cfe8fc"/>
+  <circle cx="14" cy="51" r="6.5" fill="#222"/><circle cx="14" cy="51" r="2.6" fill="#bbb"/>
+  <circle cx="36" cy="51" r="6.5" fill="#222"/><circle cx="36" cy="51" r="2.6" fill="#bbb"/>
+  <rect x="2" y="57" width="48" height="2.5" rx="1.2" fill="#9e9e9e"/>
+</svg>
