@@ -23,6 +23,8 @@
   #ctl input[type=datetime-local], #ctl input[type=text] { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; }
   #ctl button { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid #c9ced6; border-radius: 6px; background: #f6f7f9; cursor: pointer; }
   #ctl button:hover { background: #e9ecf1; }
+  #durRow { gap: 4px; }
+  #durRow button { flex: 1; padding: 4px 0; }
   #legend { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e6eb; }
   .bar { display: flex; gap: 2px; margin: 5px 0; font-size: 11px; color: #fff; text-align: center; }
   .bar span { flex: 1; padding: 3px 1px; border-radius: 4px; text-shadow: 0 0 2px #0008; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
@@ -65,6 +67,7 @@
   <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div>
   <div class="row" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><button id="goTime">Go</button><button id="nowBtn">Now</button></div>
   <div class="row" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"></div>
+  <div class="row" id="durRow" style="display:none"><span>Stay</span><button data-h="-1">&minus;1h</button><button data-h="1">1h</button><button data-h="2">2h</button><button data-h="3">3h</button><button data-h="5">5h</button><button data-h="+1">+1h</button></div>
   <div class="row"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
   <div id="legend">
@@ -75,11 +78,11 @@
    </div>
    <div id="legendDur" style="display:none">
     <div class="small">Is it legal from the start time through the end time?</div>
-    <div class="bar"><span style="background:#2e9e3f">legal whole time</span><span style="background:#f57c00">must leave early</span><span style="background:#7e3fc0">opens later</span><span style="background:#b3001b">never</span></div>
+    <div class="bar"><span style="background:#2e9e3f">Great spot!</span><span style="background:#f57c00">Leave early</span><span style="background:#7e3fc0">Arrive later</span><span style="background:#b3001b">never</span></div>
    </div>
    <div id="legendPlan">
     <div class="small">How long you can legally stay from your arrival time</div>
-    <div class="bar"><span style="background:#b3001b">never</span><span style="background:#7e3fc0">opens later</span><span style="background:#f57c00">by midnight</span><span style="background:linear-gradient(to right,#FFF200,hsl(57,100%,40%));color:#222;text-shadow:none">tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2d</span><span style="background:hsl(120,68%,40%)">4d</span><span style="background:hsl(135,70%,26%)">7 days</span></div>
+    <div class="bar"><span style="background:#b3001b">never</span><span style="background:#7e3fc0">opens later</span><span style="background:#f57c00">move today</span><span style="background:linear-gradient(to right,#FFF200,hsl(57,100%,40%));color:#222;text-shadow:none">tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2d</span><span style="background:hsl(120,68%,40%)">4d</span><span style="background:hsl(135,70%,26%)">7 days</span></div>
    </div>
    <div class="chips"><span class="chip"><i class="mtr"></i>metered</span><span class="chip"><i class="gray"></i>no data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">bus stop</span></div>
   </div>
@@ -209,7 +212,7 @@ function applyMode() {
   document.getElementById('legendNow').style.display = m === 'now' ? '' : 'none';
   document.getElementById('legendDur').style.display = m === 'dur' ? '' : 'none';
   document.getElementById('legendPlan').style.display = m === 'plan' ? '' : 'none';
-  document.getElementById('endRow').style.display = m === 'dur' ? '' : 'none';
+  document.getElementById('endRow').style.display = document.getElementById('durRow').style.display = m === 'dur' ? '' : 'none';
   document.getElementById('whenLabel').textContent = m === 'dur' ? 'Start' : 'Arrive';
   if (m === 'dur') fixEnd();
   draw();
@@ -218,6 +221,12 @@ modeEls.forEach(e => e.onchange = applyMode);
 setInterval(() => { if (getMode() === 'now' && !pinned) { setNow(); draw(); } }, 60000);
 whenEl.onchange = () => { pinned = true; if (getMode() === 'dur') fixEnd(); draw(); };
 whenEndEl.onchange = () => { fixEnd(); draw(); };
+// Quick duration buttons: 1h/2h/3h/5h set the end to Start + that many hours; -1h/+1h nudge the End by an hour (never before Start + 1h).
+document.querySelectorAll('#durRow button').forEach(b => b.onclick = () => {
+  const h = b.dataset.h, st = new Date(whenEl.value).getTime();
+  const end = h[0] === '+' || h[0] === '-' ? Math.max(st + 3600000, new Date(whenEndEl.value).getTime() + (h[0] === '-' ? -1 : 1) * 3600000) : st + (+h) * 3600000;
+  whenEndEl.value = localStr(end); draw();
+});
 suspEl.onchange = () => draw();
 
 // ---------- small geometry helpers ----------
