@@ -31,9 +31,7 @@
   .chip i { display: inline-block; width: 18px; height: 9px; border-radius: 3px; }
   .locdot { background: none; border: 0; }
   .locdot b { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #2784F5; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px #0007; }
-  .locdot i { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #2784F566; animation: locpulse 2s ease-out infinite; }
-  @keyframes locpulse { from { transform: scale(0.6); opacity: 1; } to { transform: scale(3); opacity: 0; } }
-  #msg { font-size: 12px; color: #b3001b; min-height: 0; }
+    #msg { font-size: 12px; color: #b3001b; min-height: 0; }
   #more { margin-top: 6px; border-top: 1px solid #e3e6eb; padding-top: 4px; }
   #more summary { cursor: pointer; font-size: 11.5px; color: #666; }
   #status { font-size: 11.5px; color: #555; margin-top: 4px; }
@@ -49,6 +47,14 @@
   .lbl.arrow span { font-size: 15px; color: #444; }
   .hicon { background: none; border: 0; }
   .hicon svg { display: block; }
+  .tog { cursor: pointer; user-select: none; }
+  .tog.off { opacity: .4; text-decoration: line-through; }
+  .tog img { display: block; }
+  #sources { margin-top: 4px; font-size: 11.5px; color: #555; }
+  #sources summary { cursor: pointer; color: #666; }
+  #sources ul { margin: 4px 0; padding-left: 16px; }
+  #sources a { color: #2784F5; }
+  .thanks { margin-top: 4px; font-weight: 600; }
   .hyl svg { vertical-align: middle; }
   .hdot { background: #d00000; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 1px #0008; }
 </style>
@@ -56,26 +62,43 @@
 <body>
 <div id="map"></div>
 <div id="ctl">
-  <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime status</label></div>
+  <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div>
   <div class="row" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><button id="goTime">Go</button><button id="nowBtn">Now</button></div>
+  <div class="row" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"></div>
   <div class="row"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
   <div id="legend">
    <div id="legendNow" style="display:none">
-    <div class="small">Status at the chosen time (follows the clock until you pick a time; Now resumes)</div>
-    <div class="bar"><span style="background:#2e9e3f">open now</span><span style="background:#FFF200;color:#222;text-shadow:none">opens &le; 1h</span><span style="background:#f57c00">expires</span><span style="background:#7e3fc0">opens &gt; 1h</span><span style="background:#b3001b">never</span></div>
+    <div class="small">Open or not at the chosen time (follows the clock until you pick a time; Now resumes)</div>
+    <div class="bar"><span style="background:#2e9e3f">open now</span><span style="background:#FFF200;color:#222;text-shadow:none">opens &le; 1h</span><span style="background:#f57c00">expires &le; 1h</span><span style="background:#7e3fc0">opens &gt; 1h</span><span style="background:#b3001b">never</span></div>
     <div class="small">Yellow stripes = meter switches off within 1h.</div>
+   </div>
+   <div id="legendDur" style="display:none">
+    <div class="small">Is it legal from the start time through the end time?</div>
+    <div class="bar"><span style="background:#2e9e3f">legal whole time</span><span style="background:#f57c00">must leave early</span><span style="background:#7e3fc0">opens later</span><span style="background:#b3001b">never</span></div>
    </div>
    <div id="legendPlan">
     <div class="small">How long you can legally stay from your arrival time</div>
     <div class="bar"><span style="background:#b3001b">never</span><span style="background:#7e3fc0">opens later</span><span style="background:#f57c00">by midnight</span><span style="background:linear-gradient(to right,#FFF200,hsl(57,100%,40%));color:#222;text-shadow:none">tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2d</span><span style="background:hsl(120,68%,40%)">4d</span><span style="background:hsl(135,70%,26%)">7 days</span></div>
    </div>
-   <div class="chips"><span class="chip"><i class="mtr"></i>metered</span><span class="chip"><i class="gray"></i>no data</span><span class="chip"><span class="hyl" id="legendHydrant"></span>hydrant 15 ft</span></div>
+   <div class="chips"><span class="chip"><i class="mtr"></i>metered</span><span class="chip"><i class="gray"></i>no data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">bus stop</span></div>
   </div>
   <details id="more"><summary>Details</summary>
     <div class="row"><span title="Dates when DSNY suspended alternate side parking (broom signs ignored)">ASP suspended</span><input type="text" id="susp" placeholder="2026-11-26, 2026-12-25"></div>
     <div id="status">Loading…</div>
     <div id="timing"></div>
+  </details>
+  <details id="sources"><summary>Sources</summary>
+    <ul>
+      <li>NYC Open Data, <a href="https://data.cityofnewyork.us/d/nfid-uabd" target="_blank" rel="noopener">Parking Regulation Locations and Signs</a> (NYC DOT)</li>
+      <li>NYC Open Data, <a href="https://data.cityofnewyork.us/d/inkn-q76z" target="_blank" rel="noopener">NYC Street Centerline (CSCL)</a></li>
+      <li>NYC Open Data, <a href="https://data.cityofnewyork.us/d/5bgh-vtsn" target="_blank" rel="noopener">Hydrants</a> (NYC DEP)</li>
+      <li>Base map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</li>
+      <li>Address search: <a href="https://nominatim.openstreetmap.org" target="_blank" rel="noopener">Nominatim</a> (OpenStreetMap)</li>
+      <li>Rules: NY Vehicle and Traffic Law &sect;1202 (hydrant distance)</li>
+      <li>Built with <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>, <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>, <a href="https://proj4js.org" target="_blank" rel="noopener">proj4js</a></li>
+    </ul>
+    <div class="thanks">Thank you, NYC! I <span style="color:#d00000">&hearts;</span> NY</div>
   </details>
   <div id="zoomInfo" class="small"></div>
 </div>
@@ -119,6 +142,14 @@ L.control.zoom({ position: 'bottomright' }).addTo(map);
 const TRANSIT_ON_TOP = true, BRIGHT = 'https://tiles.openfreemap.org/styles/bright';
 const transitPane = map.createPane('transit'); transitPane.style.zIndex = 635; transitPane.style.pointerEvents = 'none';
 const baseGL = L.maplibreGL({ style: BRIGHT, attribution: '&copy; OpenFreeMap, OpenMapTiles, &copy; OpenStreetMap' }).addTo(map);
+let busOn = true, hydrantsOn = true, transitFallback = false;
+const BUS_MIN_ZOOM = 17;   // bus icons show from this zoom up, same as the hydrant dots
+function updateTransit() {
+  const show = busOn && map.getZoom() >= BUS_MIN_ZOOM;
+  transitPane.style.display = show ? '' : 'none';
+  if (transitFallback) { const g = baseGL.getMaplibreMap(); if (g.getLayer('poi_transit')) g.setLayoutProperty('poi_transit', 'visibility', show ? 'visible' : 'none'); }
+}
+map.on('zoomend', updateTransit);
 const BASE_HIDE = ['poi_r1', 'poi_r7', 'poi_r20'];                 // the only point of interest kept is poi_transit (bus, rail, airport icons)
 const BASE_COLORS = { 'highway-path': '#d3d3d3' };                 // paths: light gray
 function styleBase() {
@@ -133,7 +164,7 @@ if (TRANSIT_ON_TOP) fetch(BRIGHT).then(r => r.json()).then(st => {
   st.layers = st.layers.filter(l => l.id === 'poi_transit');
   for (const l of st.layers) l.layout['text-field'] = '';
   L.maplibreGL({ style: st, pane: 'transit' }).addTo(map);
-}).catch(() => { const g = baseGL.getMaplibreMap(); const show = () => g.getLayer('poi_transit') && g.setLayoutProperty('poi_transit', 'visibility', 'visible'); g.isStyleLoaded() ? show() : g.once('load', show); });
+}).catch(() => { const g = baseGL.getMaplibreMap(); const show = () => { transitFallback = true; updateTransit(); }; g.isStyleLoaded() ? show() : g.once('load', show); });
 map.createPane('hydrants').style.zIndex = 640;   // above the colored lines (overlay 400) and ordinary markers (600)
 let layer = L.layerGroup().addTo(map);          // colored curb lines (draw() swaps in a fresh group each time)
 const hydrantLayer = L.layerGroup().addTo(map); // fire-helmet hydrant icons
@@ -152,11 +183,12 @@ const whenEl = document.getElementById('when'), suspEl = document.getElementById
 const statusEl = document.getElementById('status'), timingEl = document.getElementById('timing');
 function setNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); whenEl.value = d.toISOString().slice(0, 16); }
 setNow();
-document.getElementById('nowBtn').onclick = () => { pinned = false; setNow(); draw(); };
+document.getElementById('nowBtn').onclick = () => { pinned = false; setNow(); if (getMode() === 'dur') fixEnd(); draw(); };
 // Go: the time box already applies on change; this button is the explicit "apply" for people who expect one. A time that differs from now pins it.
 document.getElementById('goTime').onclick = () => {
   const keep = whenEl.value; setNow(); const nowStr = whenEl.value; whenEl.value = keep;
   if (keep !== nowStr) pinned = true;
+  if (getMode() === 'dur') fixEnd();
   whenEl.blur(); draw();
 };
 // Two views: "plan" = how long can I stay if I arrive at the chosen time; "now" = live, next-hour view.
@@ -164,16 +196,28 @@ const modeEls = document.querySelectorAll('input[name=mode]');
 const getMode = () => document.querySelector('input[name=mode]:checked').value;
 let pinned = false;     // realtime status: true once the user picks a time; false = follow the clock
 const getStart = () => getMode() === 'now' && !pinned ? new Date() : new Date(whenEl.value);
+// The time box is shared by all three views: switching views never changes it. Duration adds an End box.
+const whenEndEl = document.getElementById('whenEnd');
+const localStr = d => { const t = new Date(d); t.setMinutes(t.getMinutes() - t.getTimezoneOffset()); return t.toISOString().slice(0, 16); };
+function fixEnd() {      // End must be after Start: default 2 hours later
+  const s0 = new Date(whenEl.value);
+  if (!whenEndEl.value || new Date(whenEndEl.value) <= s0) whenEndEl.value = localStr(s0.getTime() + 2 * 3600000);
+}
+const durMinutes = () => Math.max(1, Math.round((new Date(whenEndEl.value) - new Date(whenEl.value)) / 60000));
 function applyMode() {
-  const now = getMode() === 'now';
-    document.getElementById('legendNow').style.display = now ? '' : 'none';
-  document.getElementById('legendPlan').style.display = now ? 'none' : '';
-  if (now) { pinned = false; setNow(); }
+  const m = getMode();
+  document.getElementById('legendNow').style.display = m === 'now' ? '' : 'none';
+  document.getElementById('legendDur').style.display = m === 'dur' ? '' : 'none';
+  document.getElementById('legendPlan').style.display = m === 'plan' ? '' : 'none';
+  document.getElementById('endRow').style.display = m === 'dur' ? '' : 'none';
+  document.getElementById('whenLabel').textContent = m === 'dur' ? 'Start' : 'Arrive';
+  if (m === 'dur') fixEnd();
   draw();
 }
 modeEls.forEach(e => e.onchange = applyMode);
 setInterval(() => { if (getMode() === 'now' && !pinned) { setNow(); draw(); } }, 60000);
-whenEl.onchange = () => { pinned = true; draw(); };
+whenEl.onchange = () => { pinned = true; if (getMode() === 'dur') fixEnd(); draw(); };
+whenEndEl.onchange = () => { fixEnd(); draw(); };
 suspEl.onchange = () => draw();
 
 // ---------- small geometry helpers ----------
@@ -629,7 +673,7 @@ async function draw() {
   drawnZoom = map.getZoom();
   if (!chunks.length) { layer.clearLayers(); return; }
   const nl = L.layerGroup();
-  const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), nowMode = getMode() === 'now';
+  const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), mode = getMode(), durMin = mode === 'dur' ? durMinutes() : 0;
   const z = map.getZoom(), weight = z >= 18 ? 8 : z >= 17 ? 6 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
   let nodata = 0, run = null;
   const flush = () => {
@@ -654,7 +698,7 @@ async function draw() {
     else {
       const r = ev.res;
       const stripe = !!r.metered && z > 16;       // zoom 16 and wider: metered curb is just a blue line
-      style = { color: r.metered && !stripe ? METER_BLUE : nowMode ? C.colorNow(r) : C.colorFor(r.min, r.never, start), weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
+      style = { color: r.metered && !stripe ? METER_BLUE : mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start), weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
       key = [style.color, style.metered, ch.faceKey, ev.hydrant ? 'H' : '', ev.parsed.length].join('|');
     }
     const joins = run && run.key === key && run.last[0] === ch.a[0] && run.last[1] === ch.a[1];
@@ -673,6 +717,7 @@ let lastDrawMs = 0;
 // Plain page elements, not canvas shapes: a second canvas layer would swallow clicks meant for the colored lines.
 function drawHydrants() {
   hydrantLayer.clearLayers();
+  if (!hydrantsOn) return;
   const z = map.getZoom();
   if (z < 17) return;     // zoom 16 and out: hidden (hydrant curb still shows dark red)
   const view = map.getBounds().pad(0.1);
@@ -707,14 +752,18 @@ function untilText(d) {
 }
 function popupHtml(ch, ev, ctx) {
   const f = faces.get(ch.faceKey) || { street: ch.name, side: '?', from: '', to: '' }, r = ev.res;
-  const verdict = ev.hydrant ? '<b style="color:#b3001b">Here: hydrant within 15 ft, no parking</b>'
+  let verdict = ev.hydrant ? '<b style="color:#b3001b">Here: hydrant within 15 ft, no parking</b>'
     : r.never ? '<b style="color:#b3001b">Here: never legal (per signs)</b>'
     : r.min === 0 ? '<b style="color:#b3001b">Here: not legal at that time</b>' + (r.opens < C.CAP ? ` (legal in ${C.fmt(r.opens)})` : '')
     : `<b>${C.fmt(r.min)} remaining</b>` + (r.capped ? '' : ` (until ${untilText(r.until)})`);
+  if (getMode() === 'dur') {
+    const d = Math.min(durMinutes(), C.CAP), ok = !ev.hydrant && !r.never && r.min >= d;
+    verdict = (ok ? '<b style="color:#2e9e3f">Legal for your whole stay</b><br>' : '<b style="color:#b3001b">Not legal for your whole stay</b><br>') + verdict;
+  }
   // one line per distinct rule (a block can have several identical signs)
   // the signs themselves, drawn like the real ones (SignRender, signs.js); one per distinct sign text, parking rules only
   const all = [...new Set(ev.parsed.map(p => SignRender.html(p.raw)))].join('');     // identical-looking signs shown once
-  return `<b>${f.street}</b>, ${f.side} side<br>${f.from} → ${f.to}<br>${verdict}${r.metered ? '<br>Metered: pay at the muni-meter' + (r.meterEnd < C.CAP ? ` (meter ends in ${C.fmt(r.meterEnd)})` : '') : ''}` +
+  return `<b>${f.street}</b>, ${f.side} side<br>${f.from} → ${f.to}<br>${verdict}${r.metered ? `<br><b style="color:${METER_BLUE}">Metered:</b>` + (r.meterEnd < C.CAP ? ` (Ends in ${C.fmt(r.meterEnd)})` : '') : ''}` +
     `<br><span class="small">Signs applying at this spot:</span>${all}${blockSummary(ch, ctx)}` +
     `<div class="small">Corners and crosswalks are not checked beyond the gap at intersections. The posted sign always wins.</div>`;
 }
@@ -916,12 +965,11 @@ map.on('click', e => {
 
 // Current location and address search (address lookup goes to OpenStreetMap's Nominatim service).
 const msgEl = document.getElementById('msg');
-let pin = null, accCircle = null;
+let pin = null;
 function showPin(ll, color, text, accuracy) {
-  if (pin) pin.remove(); if (accCircle) { accCircle.remove(); accCircle = null; }
-  if (accuracy) {        // current location: a locator dot (blue dot, pulsing ring, accuracy circle), not a pin
-    accCircle = L.circle(ll, { radius: Math.min(accuracy, 300), color: '#2784F5', weight: 1, fillColor: '#2784F5', fillOpacity: 0.12, interactive: false }).addTo(map);
-    pin = L.marker(ll, { icon: L.divIcon({ className: 'locdot', html: '<i></i><b></b>', iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(map);
+  if (pin) pin.remove();
+  if (accuracy) {        // current location: a plain blue locator dot (no accuracy circle), not a pin
+    pin = L.marker(ll, { icon: L.divIcon({ className: 'locdot', html: '<b></b>', iconSize: [22, 22] }), interactive: false, keyboard: false }).addTo(map);
   } else pin = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(map).bindTooltip(text);
   map.setView(ll, Math.max(map.getZoom(), 17));
 }
@@ -945,6 +993,9 @@ async function goAddress() {
 document.getElementById('goBtn').onclick = goAddress;
 document.getElementById('addr').onkeydown = e => { if (e.key === 'Enter') goAddress(); };
 
+updateTransit();
+document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
+document.getElementById('togBus').onclick = e => { busOn = !busOn; e.currentTarget.classList.toggle('off', !busOn); updateTransit(); };
 const zoomInfoEl = document.getElementById('zoomInfo');
 const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + map.getZoom(); };
 map.on('zoom', showZoom); showZoom();

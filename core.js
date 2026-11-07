@@ -180,6 +180,13 @@
     if (res.min <= SOON) return '#f57c00';
     return '#2e9e3f';
   }
+  // "Duration" view: will the spot stay legal from the start time through the end time (durMin minutes)?
+  // Green = legal the whole time; orange = legal at the start but you would have to leave early; violet = blocked at the start; red = never.
+  function colorDur(res, durMin) {
+    if (res.never) return '#b3001b';
+    if (res.min <= 0) return '#7e3fc0';
+    return res.min >= Math.min(durMin, CAP) ? '#2e9e3f' : '#f57c00';
+  }
   function fmt(min) {
     if (min >= CAP) return '7 days (the city\'s limit)';
     if (min < 60) return min + ' min';
@@ -210,6 +217,6 @@
     return Math.min(ax, ay) >= 0.4 * Math.max(ax, ay) ? [major, minor] : [major];
   }
 
-  const api = { parseSign, activeAt, stay, colorFor, colorNow, fmt, normStreet, cardinal, cardinals, dateKey, CAP, PROHIBIT };
+  const api = { parseSign, activeAt, stay, colorFor, colorNow, colorDur, fmt, normStreet, cardinal, cardinals, dateKey, CAP, PROHIBIT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ParkCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
