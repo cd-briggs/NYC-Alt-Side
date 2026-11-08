@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>NYC Parking</title>
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -10,8 +10,13 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
-  html, body { margin: 0; height: 100%; font: 14px/1.4 -apple-system, system-ui, sans-serif; }
-  #map { position: absolute; inset: 0 0 0 0; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; font: 14px/1.4 -apple-system, system-ui, sans-serif; }
+  /* Page itself never pans or zooms; only the map does. */
+  body { position: fixed; inset: 0; width: 100%; touch-action: none; }
+  #ctl, #showPanel { touch-action: manipulation; }
+  /* Map fills the whole screen, even behind Safari's bottom bar (100lvh = height with the bars collapsed); the zoom buttons and credits are lifted above the bar */
+  #map { position: absolute; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; }
+  .leaflet-bottom { bottom: calc(100vh - 100dvh); bottom: max(calc(100lvh - 100dvh), env(safe-area-inset-bottom)); }
   #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 316px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
   #ctl label { cursor: pointer; }
   #modes { display: flex; background: #e9ecf1; border-radius: 9px; padding: 2px; margin-bottom: 8px; }
@@ -35,8 +40,8 @@
   .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; min-height: 28px; }
   #top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
   #top #modes { flex: 1; margin-bottom: 0; }
-  #hidePanel { padding: 5px 9px !important; font-size: 14px !important; line-height: 1; }
-  #showPanel { position: absolute; z-index: 1000; top: max(10px, env(safe-area-inset-top)); left: 10px; width: 42px; height: 42px; padding: 0; display: none; align-items: center; justify-content: center; background: #fffffff2; border: 0; border-radius: 12px; box-shadow: 0 2px 12px #0003; cursor: pointer; }
+  #hidePanel { padding: 4px 8px !important; line-height: 0; }
+  #showPanel { position: absolute; z-index: 1000; top: max(10px, env(safe-area-inset-top)); left: 10px; width: 40px; height: 40px; padding: 0; display: none; align-items: center; justify-content: center; background: #fffffff2; border: 0; border-radius: 12px; box-shadow: 0 2px 12px #0003; cursor: pointer; }
   #ctl.panelOff { display: none; }
   #lowerToggle { display: block; width: 100%; margin: 6px 0 0; padding: 2px 0 !important; border: 0 !important; border-top: 1px solid #e3e6eb !important; border-radius: 0 !important; background: none !important; color: #666; font-size: 11.5px !important; }
   #ctl.lowerOff #lower { display: none; }
@@ -86,11 +91,11 @@
 <div id="map"></div>
 <button id="showPanel" title="Show the panel"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
 <div id="ctl">
-  <div id="top"><div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div><button id="hidePanel" title="Hide this panel (full-screen map)">&#x2715;</button></div>
+  <div id="top"><button id="hidePanel" title="Hide this panel (full-screen map)"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button><div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div></div>
   <div class="row g" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><div class="acts"><button id="goTime">Go</button><button id="nowBtn">Now</button></div></div>
   <div class="row g" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"><span id="durText"></span></div>
   <div class="row" id="durRow" style="display:none"><span>Stay</span><button data-h="1">1h</button><button data-h="2">2h</button><button data-h="3">3h</button><button data-h="5">5h</button><button data-h="-1" class="adj">&minus;1h</button><button data-h="+1" class="adj">+1h</button></div>
-  <div class="row" id="addrRow"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
+  <div class="row" id="addrRow"><input type="text" id="addr" placeholder="Search address or location"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
   <button id="lowerToggle"></button>
   <div id="lower">
@@ -1052,6 +1057,7 @@ function setLower(off) { ctlEl.classList.toggle('lowerOff', off); lowerBtn.textC
 const showBtn = document.getElementById('showPanel');
 function setPanel(off) { ctlEl.classList.toggle('panelOff', off); showBtn.style.display = off ? 'flex' : 'none'; if (off) map.closePopup(); }
 lowerBtn.onclick = () => setLower(!ctlEl.classList.contains('lowerOff'));
+['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
 document.getElementById('hidePanel').onclick = () => setPanel(true);
 showBtn.onclick = () => setPanel(false);
 setLower(saved('lowerOff'));
