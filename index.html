@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="theme-color" content="#f8f4f0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>NYC Parking</title>
 <link rel="icon" type="image/png" href="icon.png">
@@ -10,12 +11,12 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; font: 14px/1.4 -apple-system, system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #f8f4f0; overflow: hidden; overscroll-behavior: none; font: 14px/1.4 -apple-system, system-ui, sans-serif; }
   /* Page itself never pans or zooms; only the map does. */
   body { position: fixed; inset: 0; width: 100%; touch-action: none; }
   #ctl, #showPanel { touch-action: manipulation; }
   /* Map fills the whole screen, even behind Safari's bottom bar (100lvh = height with the bars collapsed); the zoom buttons and credits are lifted above the bar */
-  #map { position: absolute; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; }
+  #map { position: fixed; inset: 0; }
   .leaflet-bottom { bottom: calc(100vh - 100dvh); bottom: max(calc(100lvh - 100dvh), env(safe-area-inset-bottom)); }
   #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 316px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
   #ctl label { cursor: pointer; }
@@ -103,7 +104,6 @@
    <div id="legendNow" style="display:none">
     <div class="small">Open or not at the chosen time (follows the clock until you pick a time; Now resumes)</div>
     <div class="bar"><span style="background:#2e9e3f">Open Now</span><span style="background:#FFF200;color:#222;text-shadow:none">Opens &le; 1h</span><span style="background:#f57c00">Expires &le; 1h</span><span style="background:#7e3fc0">Opens &gt; 1h</span><span style="background:#b3001b">Never</span></div>
-    <div class="small">Yellow stripes = meter switches off within 1h.</div>
    </div>
    <div id="legendDur" style="display:none">
     <div class="small">Is it legal from the start time through the end time?</div>
@@ -868,7 +868,7 @@ function* aliasWays(ways) {
   return n;
 }
 // Tiles (bake-tiles.py): files tiles/<col>_<row>.js, each calling __tile(key, data). Loaded as scripts so this also works from file://.
-const MIN_LINE_ZOOM = 15;       // below this the page draws nothing (a citywide view would need hundreds of tiles)
+const MIN_LINE_ZOOM = 15 - ZOOM_SHIFT;       // 14 on phones, 15 elsewhere; below this the page draws nothing (a citywide view would need hundreds of tiles)
 const tileCache = new Map(), tilePending = new Map();
 window.__tile = (key, data) => tileCache.set(key, data);
 function getTile(key) {
@@ -1060,7 +1060,9 @@ lowerBtn.onclick = () => setLower(!ctlEl.classList.contains('lowerOff'));
 ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault()));
 document.getElementById('hidePanel').onclick = () => setPanel(true);
 showBtn.onclick = () => setPanel(false);
-setLower(saved('lowerOff'));
+setLower(saved('lowerOff'));   // legend is shown unless the visitor hid it on an earlier visit
+['resize', 'orientationchange'].forEach(t => addEventListener(t, () => map.invalidateSize()));
+setTimeout(() => map.invalidateSize(), 300);
 
 updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
