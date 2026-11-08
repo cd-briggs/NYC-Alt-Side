@@ -25,6 +25,7 @@
   html.sa, html.sa body { height: var(--sh); }
   html.sa body { position: absolute; inset: auto; top: 0; left: 0; }
   html.sa #map { position: absolute; height: var(--sh); }
+  html.sa .leaflet-control-attribution { margin-right: 28px; }   /* the screen's rounded bottom corners would clip the credit text */
   /* --lift (set by JS) = how much of the map sits under the browser's bottom bar right now, so zoom buttons and credits stay visible */
   .leaflet-bottom { bottom: var(--lift, 0px); }
   #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 364px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
@@ -1131,7 +1132,7 @@ function setLift() {
     const portrait = innerHeight > innerWidth, sh = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
     root.classList.add('sa'); root.style.setProperty('--sh', sh + 'px');
     const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(probe);
-    root.style.setProperty('--lift', Math.round(parseFloat(getComputedStyle(probe).paddingBottom) || 0) + 'px'); probe.remove();
+    root.style.setProperty('--lift', Math.round((parseFloat(getComputedStyle(probe).paddingBottom) || 0) * 0.25) + 'px'); probe.remove();
     map.invalidateSize(); return;
   }
   const vv = window.visualViewport, mapBottom = mapEl.getBoundingClientRect().bottom;
