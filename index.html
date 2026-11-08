@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="theme-color" content="#f8f4f0">
+<!-- no theme-color: iOS Safari paints its top and bottom bars solid with that color and hides the map beneath them -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>NYC Parking</title>
 <link rel="icon" type="image/png" href="icon.png">
@@ -46,9 +49,10 @@
   #ctl input[type=datetime-local] { line-height: calc(var(--fh) - 2px); padding-top: 0; padding-bottom: 0; }
   #ctl input[type=datetime-local]::-webkit-datetime-edit, #ctl input[type=datetime-local]::-webkit-datetime-edit-fields-wrapper { padding: 0; line-height: inherit; }
   #ctl input[type=datetime-local]::-webkit-date-and-time-value { min-height: 0; line-height: inherit; text-align: left; }
-  #top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  #top { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   #top #modes { flex: 1; margin-bottom: 0; }
-  #hidePanel { padding: 4px 8px !important; line-height: 0; }
+  #hidePanel { padding: 0 8px !important; display: flex; align-items: center; justify-content: center; }
+  #hidePanel svg, #showPanel svg { display: block; }
   #showPanel { position: absolute; z-index: 1000; top: max(10px, env(safe-area-inset-top)); left: 10px; width: 40px; height: 40px; padding: 0; display: none; align-items: center; justify-content: center; background: #fffffff2; border: 0; border-radius: 12px; box-shadow: 0 2px 12px #0003; cursor: pointer; }
   #ctl.panelOff { display: none; }
   #lowerToggle { display: block; width: 100%; margin: 6px 0 0; padding: 2px 0 !important; border: 0 !important; border-top: 1px solid #e3e6eb !important; border-radius: 0 !important; background: none !important; color: #666; font-size: 11.5px !important; }
@@ -161,7 +165,7 @@ const toLL = (x, y) => { const [lng, lat] = proj4('EPSG:2263', 'EPSG:4326', [x, 
 const SIGNS_URL = 'https://data.cityofnewyork.us/resource/nfid-uabd.json';
 const STREETS_URL = 'https://data.cityofnewyork.us/resource/inkn-q76z.json';  // NYC Street Centerline (CSCL)
 const HYDRANT_URL = 'https://data.cityofnewyork.us/resource/5bgh-vtsn.json';
-const OFFSET_FT = 17;      // draw lines this far from the street centerline (was 14; moved out 3 ft so thicker lines grow onto the sidewalk, not toward the street)
+const OFFSET_FT = 20;      // draw lines this far from the street centerline (was 14; moved out so thicker lines keep the same inner edge and grow onto the sidewalk)
 const CHUNK_FT = 20;       // lines are split into pieces this long
 const CORNER_PAD_FT = 4;   // extra gap at intersections, beyond half the cross street's width
 const HYDRANT_FT = 15;     // NY VTL 1202: no stopping/standing/parking within 15 ft of a hydrant (NYC rule text not yet verified)
@@ -741,7 +745,7 @@ async function draw() {
   if (!chunks.length) { layer.clearLayers(); return; }
   const nl = L.layerGroup();
   const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), mode = getMode(), durMin = mode === 'dur' ? durMinutes() : 0;
-  const z = map.getZoom(), weight = z >= 19 ? 16 : z >= 18 ? 12 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+  const z = map.getZoom(), weight = z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 9 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
   let nodata = 0, run = null;
   const flush = () => {
     if (!run) return;
