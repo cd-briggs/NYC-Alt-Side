@@ -27,7 +27,23 @@
   #durRow button { flex: 1; padding: 4px 0; }
   #durRow button.adj { background: #dbe8fb; border-color: #8fb0d9; color: #1a4f9c; font-weight: 600; }
   #durRow button.adj:first-of-type { margin-left: 6px; }
-  #durText { flex: none; font-weight: 600; font-size: 12px; color: #1a4f9c; }
+  #durText { font-weight: 600; font-size: 12.5px; color: #1a4f9c; text-align: center; padding: 4px 0; border-radius: 6px; background: #eef4fd; white-space: nowrap; }
+  /* Start/Arrive and End rows share one grid: label | date field | right column (Go+Now, or the duration), so both fields are the same width */
+  .row.g { display: grid; grid-template-columns: 44px minmax(0, 1fr) 104px; gap: 6px; }
+  .row.g .acts { display: flex; gap: 4px; }
+  .row.g .acts button { flex: 1; padding: 4px 0; }
+  .row.g input { width: 100%; box-sizing: border-box; min-width: 0; }
+  #addrRow #searchBtn { padding: 4px 7px; }
+  #ctl.noSearch #addr, #ctl.noSearch #goBtn { display: none; }
+  #ctl.noSearch #addrRow { justify-content: flex-start; }
+  #lowerToggle { display: block; width: 100%; margin: 6px 0 0; padding: 2px 0 !important; border: 0 !important; border-top: 1px solid #e3e6eb !important; border-radius: 0 !important; background: none !important; color: #666; font-size: 11.5px !important; }
+  #ctl.lowerOff #lower { display: none; }
+  #ctl.lowerOff #lowerToggle { margin-top: 4px; }
+  /* phones: panel spans the screen width, centered, with room for the notch */
+  @media (max-width: 600px) {
+    #ctl { left: 10px; right: 10px; width: auto; top: max(10px, env(safe-area-inset-top)); max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box; }
+    #ctl input[type=text] { font-size: 16px; }   /* 16 px stops iOS Safari zooming the page when the field is focused */
+  }
   #legend { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e6eb; }
   .bar { display: flex; gap: 2px; margin: 5px 0; font-size: 11px; color: #fff; text-align: center; }
   .bar span { flex: 1; padding: 3px 1px; border-radius: 4px; text-shadow: 0 0 2px #0008; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
@@ -44,7 +60,7 @@
   .gray { background: #9a9a9a; height: 3px !important; }
   .mtr { background: #2784F5; height: 5px !important; }
   .small { font-size: 11px; color: #555; }
-  .leaflet-popup-content { font-size: 12px; max-height: 260px; overflow: auto; }
+  .leaflet-popup-content { font-size: 12px; overflow: auto; }
   .leaflet-popup-content .s { color: #444; margin: 2px 0; }
   .lbl { pointer-events: none; }
   .lbl span { position: absolute; left: 0; top: 0; white-space: nowrap; font: 600 11px/1 -apple-system, system-ui, sans-serif; color: #222; letter-spacing: .3px;
@@ -68,11 +84,13 @@
 <div id="map"></div>
 <div id="ctl">
   <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div>
-  <div class="row" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><button id="goTime">Go</button><button id="nowBtn">Now</button></div>
-  <div class="row" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"><span id="durText"></span></div>
+  <div class="row g" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><div class="acts"><button id="goTime">Go</button><button id="nowBtn">Now</button></div></div>
+  <div class="row g" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"><span id="durText"></span></div>
   <div class="row" id="durRow" style="display:none"><span>Stay</span><button data-h="1">1h</button><button data-h="2">2h</button><button data-h="3">3h</button><button data-h="5">5h</button><button data-h="-1" class="adj">&minus;1h</button><button data-h="+1" class="adj">+1h</button></div>
-  <div class="row"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
+  <div class="row" id="addrRow"><button id="searchBtn" title="Show or hide the address box"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.6"/><path d="M10 10l4.5 4.5"/></svg></button><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
+  <button id="lowerToggle"></button>
+  <div id="lower">
   <div id="legend">
    <div id="legendNow" style="display:none">
     <div class="small">Open or not at the chosen time (follows the clock until you pick a time; Now resumes)</div>
@@ -107,6 +125,7 @@
     <div class="thanks">Thank you, NYC! I <span style="color:#d00000">&hearts;</span> NY</div>
   </details>
   <div id="zoomInfo" class="small"></div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -149,7 +168,9 @@ const TRANSIT_ON_TOP = true, BRIGHT = 'https://tiles.openfreemap.org/styles/brig
 const transitPane = map.createPane('transit'); transitPane.style.zIndex = 635; transitPane.style.pointerEvents = 'none';
 const baseGL = L.maplibreGL({ style: BRIGHT, attribution: '&copy; OpenFreeMap, OpenMapTiles, &copy; OpenStreetMap' }).addTo(map);
 let busOn = true, hydrantsOn = true, transitFallback = false;
-const BUS_MIN_ZOOM = 17;   // bus icons show from this zoom up, same as the hydrant dots
+const IS_PHONE = matchMedia('(max-width: 600px)').matches;
+const ZOOM_SHIFT = IS_PHONE ? 1 : 0;   // a phone screen shows less map at the same zoom, so its hydrant and bus-stop levels sit one zoom lower
+const BUS_MIN_ZOOM = 17 - ZOOM_SHIFT;   // bus icons show from this zoom up, same as the hydrant dots
 function updateTransit() {
   const show = busOn && map.getZoom() >= BUS_MIN_ZOOM;
   transitPane.style.display = show ? '' : 'none';
@@ -735,8 +756,8 @@ let lastDrawMs = 0;
 function drawHydrants() {
   hydrantLayer.clearLayers();
   if (!hydrantsOn) return;
-  const z = map.getZoom();
-  if (z < 17) return;     // zoom 16 and out: hidden (hydrant curb still shows dark red)
+  const z = map.getZoom() + ZOOM_SHIFT;   // phone: zoom 16 looks like desktop 17
+  if (z < 17) return;     // wider than that: hidden (hydrant curb still shows dark red)
   const view = map.getBounds().pad(0.1);
   const inView = hydrantData.filter(h => view.contains([h.lat, h.lng]));
   // 17: tiny dots; 18: small icons; 19: larger icons
@@ -977,7 +998,9 @@ map.on('click', e => {
   const ch = pickChunk(x, y, Math.max(12, ftPerPx * 12));     // about 12 screen pixels
   if (!ch) return;
   const ctx = { start: getStart(), opts: { suspended: parseSuspended() }, memo: new Map() }, ev = evalChunk(ch, ctx.start, ctx.opts, ctx.memo);
-  L.popup().setLatLng(e.latlng).setContent(ev ? popupHtml(ch, ev, ctx) : nodataHtml(ch)).openOn(map);
+  // keep the popup clear of the control panel: pan the map so it opens below the panel, and cap its height to the room left
+  const panelBottom = document.getElementById('ctl').getBoundingClientRect().bottom, room = map.getSize().y - panelBottom - 50;
+  L.popup({ autoPanPaddingTopLeft: [10, panelBottom + 10], autoPanPaddingBottomRight: [10, 10], maxHeight: Math.max(120, Math.min(320, room)) }).setLatLng(e.latlng).setContent(ev ? popupHtml(ch, ev, ctx) : nodataHtml(ch)).openOn(map);
 });
 
 // Current location and address search (address lookup goes to OpenStreetMap's Nominatim service).
@@ -995,7 +1018,7 @@ document.getElementById('locBtn').onclick = () => {
   if (!navigator.geolocation) { msgEl.textContent = 'This browser cannot share your location.'; return; }
   msgEl.style.color = '#555'; msgEl.textContent = 'Finding you…';
   navigator.geolocation.getCurrentPosition(pos => { msgEl.textContent = ''; showPin([pos.coords.latitude, pos.coords.longitude], '#2784F5', 'You are here', pos.coords.accuracy); },
-    err => { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Location failed: ' + err.message; }, { enableHighAccuracy: true, timeout: 15000 });
+    err => { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Location failed: ' + err.message + (err.code === 1 && /iPhone|iPad/.test(navigator.userAgent) ? '. iPhone: Settings > Privacy & Security > Location Services > Safari Websites > While Using; then in Safari tap aA > Website Settings > Location > Allow.' : ''); }, { enableHighAccuracy: true, timeout: 15000 });
 };
 async function goAddress() {
   const q0 = document.getElementById('addr').value.trim(); if (!q0) return;
@@ -1009,6 +1032,16 @@ async function goAddress() {
 }
 document.getElementById('goBtn').onclick = goAddress;
 document.getElementById('addr').onkeydown = e => { if (e.key === 'Enter') goAddress(); };
+
+// Collapsible panel parts (remembered between visits): everything from the legend down, and the address box (shrinks to the magnifier icon)
+const ctlEl = document.getElementById('ctl'), lowerBtn = document.getElementById('lowerToggle');
+const saved = k => { try { return localStorage.getItem(k) === '1'; } catch (e) { return false; } };
+const save = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
+function setLower(off) { ctlEl.classList.toggle('lowerOff', off); lowerBtn.textContent = off ? '\u25BE Legend & more' : '\u25B4 Hide legend & more'; save('lowerOff', off); }
+function setSearch(off) { ctlEl.classList.toggle('noSearch', off); save('noSearch', off); }
+lowerBtn.onclick = () => setLower(!ctlEl.classList.contains('lowerOff'));
+document.getElementById('searchBtn').onclick = () => { const off = !ctlEl.classList.contains('noSearch'); setSearch(off); if (!off) document.getElementById('addr').focus(); };
+setLower(saved('lowerOff')); setSearch(saved('noSearch'));
 
 updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
