@@ -165,7 +165,7 @@ const toLL = (x, y) => { const [lng, lat] = proj4('EPSG:2263', 'EPSG:4326', [x, 
 const SIGNS_URL = 'https://data.cityofnewyork.us/resource/nfid-uabd.json';
 const STREETS_URL = 'https://data.cityofnewyork.us/resource/inkn-q76z.json';  // NYC Street Centerline (CSCL)
 const HYDRANT_URL = 'https://data.cityofnewyork.us/resource/5bgh-vtsn.json';
-const OFFSET_FT = 20;      // draw lines this far from the street centerline (was 14; moved out so thicker lines keep the same inner edge and grow onto the sidewalk)
+const OFFSET_FT = 25;      // draw lines this far from the street centerline (was 14; moved out so thicker lines keep the same inner edge and grow onto the sidewalk)
 const CHUNK_FT = 20;       // lines are split into pieces this long
 const CORNER_PAD_FT = 4;   // extra gap at intersections, beyond half the cross street's width
 const HYDRANT_FT = 15;     // NY VTL 1202: no stopping/standing/parking within 15 ft of a hydrant (NYC rule text not yet verified)
@@ -745,7 +745,7 @@ async function draw() {
   if (!chunks.length) { layer.clearLayers(); return; }
   const nl = L.layerGroup();
   const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), mode = getMode(), durMin = mode === 'dur' ? durMinutes() : 0;
-  const z = map.getZoom(), weight = z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 9 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+  const z = map.getZoom(), weight = z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
   let nodata = 0, run = null;
   const flush = () => {
     if (!run) return;
