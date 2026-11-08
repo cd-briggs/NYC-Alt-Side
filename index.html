@@ -5,8 +5,8 @@
 <!-- no theme-color: iOS Safari paints its top and bottom bars solid with that color and hides the map beneath them -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<!-- home-screen app: "default" keeps the page inside the area below the status bar. "black-translucent" draws under the status bar but iOS then cuts the page 47 pt short at the bottom. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- home-screen app: translucent status bar so the map runs under it. iOS then makes the page 47 pt short at the bottom; html.sa (set by setLift) works around that. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>NYC Parking</title>
 <link rel="icon" type="image/png" href="icon.png">
@@ -21,6 +21,10 @@
   #ctl, #showPanel { touch-action: manipulation; }
   /* Map fills the whole screen, even behind Safari's bottom bar (100lvh = height with the bars collapsed); the zoom buttons and credits are lifted above the bar */
   #map { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; }
+  /* Home-screen app (html.sa): iOS reports a viewport 47 pt shorter than the screen, so size everything to the real screen height (--sh) with absolute positioning instead of fixed */
+  html.sa, html.sa body { height: var(--sh); }
+  html.sa body { position: absolute; inset: auto; top: 0; left: 0; }
+  html.sa #map { position: absolute; height: var(--sh); }
   /* --lift (set by JS) = how much of the map sits under the browser's bottom bar right now, so zoom buttons and credits stay visible */
   .leaflet-bottom { bottom: var(--lift, 0px); }
   #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 364px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
@@ -122,7 +126,7 @@
   body.night .leaflet-control-attribution { background: #1c1e23b3 !important; color: #999; }
   body.night .leaflet-control-attribution a { color: #8ab4f8; }
   #togNight { margin-left: auto; display: inline-flex; gap: 0; border: 1px solid #c9ced6; border-radius: 7px; overflow: hidden; }
-  #ctl #togNight button { border: 0; border-radius: 0; background: none; padding: 2px 5px; line-height: 0; height: auto; cursor: pointer; opacity: .45; }
+  #ctl #togNight button { border: 0; border-radius: 0; background: none; padding: 2px 4px; line-height: 0; height: auto; cursor: pointer; opacity: .45; }
   #ctl #togNight button.on { background: #e3e7ee; opacity: 1; }
   body.night #togNight { border-color: #484c55; }
   body.night #ctl #togNight button.on { background: #454a55; }
@@ -1122,14 +1126,16 @@ updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
 // Lift zoom buttons and credits above whatever part of the map is under the browser's bottom bar
 function setLift() {
-  const mapEl = document.getElementById('map');
-  const vv = window.visualViewport, mapBottom = mapEl.getBoundingClientRect().bottom;
-  let lift = vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0;
-  if (navigator.standalone) {   // home-screen app: keep the controls above the home indicator
+  const mapEl = document.getElementById('map'), root = document.documentElement;
+  if (navigator.standalone) {
+    const portrait = innerHeight > innerWidth, sh = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    root.classList.add('sa'); root.style.setProperty('--sh', sh + 'px');
     const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(probe);
-    lift = Math.max(lift, Math.round(parseFloat(getComputedStyle(probe).paddingBottom) || 0)); probe.remove();
+    root.style.setProperty('--lift', Math.round(parseFloat(getComputedStyle(probe).paddingBottom) || 0) + 'px'); probe.remove();
+    map.invalidateSize(); return;
   }
-  document.documentElement.style.setProperty('--lift', lift + 'px');
+  const vv = window.visualViewport, mapBottom = mapEl.getBoundingClientRect().bottom;
+  root.style.setProperty('--lift', (vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0) + 'px');
 }
 setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
 // Night mode. Tweak these values. map = filter on the whole base map (invert makes it dark; saturate lower = grayer).
@@ -1147,8 +1153,8 @@ function applyNightPaint(on) {
   }
 }
 const nightEl = document.getElementById('togNight');
-const SUN_SVG = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#f0a000" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3.6" fill="#f0a000"/><path d="M10 1.5v2.4M10 16.1v2.4M1.5 10h2.4M16.1 10h2.4M4 4l1.7 1.7M14.3 14.3L16 16M16 4l-1.7 1.7M5.7 14.3L4 16"/></svg>';
-const MOON_SVG = '<svg width="17" height="17" viewBox="0 0 20 20"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" fill="#5b6b8c"/></svg>';
+const SUN_SVG = '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#f0a000" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3.6" fill="#f0a000"/><path d="M10 1.5v2.4M10 16.1v2.4M1.5 10h2.4M16.1 10h2.4M4 4l1.7 1.7M14.3 14.3L16 16M16 4l-1.7 1.7M5.7 14.3L4 16"/></svg>';
+const MOON_SVG = '<svg width="16" height="16" viewBox="0 0 20 20"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" fill="#5b6b8c"/></svg>';
 nightEl.children[0].innerHTML = SUN_SVG; nightEl.children[1].innerHTML = MOON_SVG;
 function setNight(on, remember) {
   document.body.classList.toggle('night', on);
