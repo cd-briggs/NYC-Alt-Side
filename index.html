@@ -5,7 +5,8 @@
 <!-- no theme-color: iOS Safari paints its top and bottom bars solid with that color and hides the map beneath them -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- home-screen app: "default" keeps the page inside the area below the status bar. "black-translucent" draws under the status bar but iOS then cuts the page 47 pt short at the bottom. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>NYC Parking</title>
 <link rel="icon" type="image/png" href="icon.png">
@@ -1122,15 +1123,12 @@ document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn;
 // Lift zoom buttons and credits above whatever part of the map is under the browser's bottom bar
 function setLift() {
   const mapEl = document.getElementById('map');
-  if (navigator.standalone) {   // home-screen app: size the map to the whole screen, including the home-indicator strip that vh units leave out
-    const portrait = innerHeight > innerWidth, sh = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-    mapEl.style.height = sh + 'px';
-    const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(probe);
-    const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; probe.remove();
-    document.documentElement.style.setProperty('--lift', Math.round(safe) + 'px'); map.invalidateSize(); return;
-  }
   const vv = window.visualViewport, mapBottom = mapEl.getBoundingClientRect().bottom;
-  const lift = vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0;
+  let lift = vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0;
+  if (navigator.standalone) {   // home-screen app: keep the controls above the home indicator
+    const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(probe);
+    lift = Math.max(lift, Math.round(parseFloat(getComputedStyle(probe).paddingBottom) || 0)); probe.remove();
+  }
   document.documentElement.style.setProperty('--lift', lift + 'px');
 }
 setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
