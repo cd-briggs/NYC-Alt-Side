@@ -41,7 +41,11 @@
   .row.g { display: grid; grid-template-columns: 44px minmax(0, 1fr) 104px; gap: 6px; }
   .row.g .acts { display: flex; gap: 4px; }
   .row.g .acts button { flex: 1; padding: 4px 0; }
-  .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; height: var(--fh); line-height: normal; }
+  .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; height: var(--fh); }
+  /* date/time fields: line-height equal to the box height centers the text vertically in Safari and Chrome */
+  #ctl input[type=datetime-local] { line-height: calc(var(--fh) - 2px); padding-top: 0; padding-bottom: 0; }
+  #ctl input[type=datetime-local]::-webkit-datetime-edit, #ctl input[type=datetime-local]::-webkit-datetime-edit-fields-wrapper { padding: 0; line-height: inherit; }
+  #ctl input[type=datetime-local]::-webkit-date-and-time-value { min-height: 0; line-height: inherit; text-align: left; }
   #top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
   #top #modes { flex: 1; margin-bottom: 0; }
   #hidePanel { padding: 4px 8px !important; line-height: 0; }
