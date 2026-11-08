@@ -1134,12 +1134,12 @@ function setLift() {
 setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
 // Night mode. Tweak these values. map = filter on the whole base map (invert makes it dark; saturate lower = grayer).
 // bg / building / park are set in the map style BEFORE the invert, so a LIGHTER value here shows DARKER on screen. Lines = filter on the curb lines (1 = unchanged).
-const NIGHT = { map: 'invert(1) hue-rotate(180deg) saturate(0.55)', lines: 'brightness(0.9)', bg: '#dedad6', building: '#a9a5a1', park: '#9fbf8e' };
+const NIGHT = { map: 'invert(1) hue-rotate(180deg) saturate(0.55)', lines: 'brightness(0.9)', bg: '#dedad6', building: '#b3afab', park: '#9fbf8e' };
 const NIGHT_LAYERS = { 'background': ['background-color', 'bg'], 'building': ['fill-color', 'building'], 'building-top': ['fill-color', 'building'], 'park': ['fill-color', 'park'], 'landcover-grass': ['fill-color', 'park'], 'landcover-grass-park': ['fill-color', 'park'] };
 const dayPaint = {};
 function applyNightPaint(on) {
   const g = baseGL.getMaplibreMap();
-  if (!g.isStyleLoaded()) { g.once('load', () => applyNightPaint(document.body.classList.contains('night'))); return; }
+  if (!g.getLayer('building')) { g.once('styledata', () => applyNightPaint(document.body.classList.contains('night'))); return; }   // style not parsed yet: try again when it is
   for (const [id, [prop, key]] of Object.entries(NIGHT_LAYERS)) {
     if (!g.getLayer(id)) continue;
     if (!(id in dayPaint)) dayPaint[id] = g.getPaintProperty(id, prop);
