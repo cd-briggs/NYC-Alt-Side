@@ -22,7 +22,7 @@
   #map { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; }
   /* --lift (set by JS) = how much of the map sits under the browser's bottom bar right now, so zoom buttons and credits stay visible */
   .leaflet-bottom { bottom: var(--lift, 0px); }
-  #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 340px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
+  #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 364px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
   #ctl label { cursor: pointer; }
   #modes { display: flex; background: #e9ecf1; border-radius: 9px; padding: 2px; margin-bottom: 8px; }
   #modes label { flex: 1; text-align: center; padding: 5px 4px; border-radius: 7px; font-weight: 600; font-size: 12.5px; color: #555; }
@@ -67,8 +67,8 @@
   #legend { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e6eb; }
   .bar { display: flex; gap: 2px; margin: 5px 0; font-size: 11px; color: #fff; text-align: center; }
   .bar span { flex: 1; padding: 3px 1px; border-radius: 4px; text-shadow: 0 0 2px #0008; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
-  .chips { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #333; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #333; white-space: nowrap; }
   .chip i { display: inline-block; width: 18px; height: 9px; border-radius: 3px; }
   .locdot { background: none; border: 0; }
   .locdot b { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #2784F5; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 5px #0007; }
@@ -120,7 +120,8 @@
   body.night .leaflet-bar a { background: #1c1e23; color: #eee; border-color: #484c55; }
   body.night .leaflet-control-attribution { background: #1c1e23b3 !important; color: #999; }
   body.night .leaflet-control-attribution a { color: #8ab4f8; }
-  #togNight { cursor: pointer; user-select: none; }
+  #togNight { cursor: pointer; user-select: none; margin-left: auto; padding: 0 2px; }
+  #togNight svg { display: block; }
 </style>
 </head>
 <body>
@@ -148,8 +149,7 @@
     <div class="small">Shows the best and longest parking spots available.</div>
     <div class="bar"><span style="background:#b3001b">Never</span><span style="background:#7e3fc0">Opens Later</span><span style="background:#f57c00">Move Today</span><span style="background:#FFF200;color:#222;text-shadow:none" id="tmrBar">Tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2 Days</span><span style="background:hsl(120,68%,40%)">4 Days</span><span style="background:hsl(135,70%,26%)">7 Days</span></div>
    </div>
-   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span></div>
-   <div class="chips"><span class="chip" id="togNight"></span></div>
+   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span><span class="chip" id="togNight" title="Night / day map" role="button" aria-label="Night / day map"></span></div>
   </div>
   <details id="more"><summary>Details</summary>
     <div id="status">Loading…</div>
@@ -221,7 +221,7 @@ function updateTransit() {
 }
 map.on('zoomend', updateTransit);
 // House numbers: the map tiles carry them but the Bright style never draws them, so add a text layer (visible from HOUSE_MIN_ZOOM)
-const HOUSE_MIN_ZOOM = 18 - ZOOM_SHIFT;
+const HOUSE_MIN_ZOOM = 17;   // MapLibre zoom is one below the Leaflet zoom shown in the panel, so 17 here = zoom level 18
 function addHouseNumbers() {
   const g = baseGL.getMaplibreMap();
   if (g.getLayer('housenumber_own') || !g.getSource('openmaptiles')) return;
@@ -1131,12 +1131,14 @@ function setLift() {
 }
 setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
 // Night mode. Tweak these values (map = filter on the base map, lines = filter on the curb lines, brightness 1 = unchanged).
-const NIGHT = { map: 'invert(1) hue-rotate(180deg) brightness(0.72) contrast(0.9) saturate(0.8)', lines: 'brightness(0.9)' };
+const NIGHT = { map: 'invert(1) hue-rotate(180deg) brightness(1) contrast(0.82) saturate(0.85)', lines: 'brightness(0.9)' };
 const nightEl = document.getElementById('togNight');
+const SUN_SVG = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#f0a000" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3.6" fill="#f0a000"/><path d="M10 1.5v2.4M10 16.1v2.4M1.5 10h2.4M16.1 10h2.4M4 4l1.7 1.7M14.3 14.3L16 16M16 4l-1.7 1.7M5.7 14.3L4 16"/></svg>';
+const MOON_SVG = '<svg width="18" height="18" viewBox="0 0 20 20"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" fill="#5b6b8c"/></svg>';
 function setNight(on, remember) {
   document.body.classList.toggle('night', on);
   document.documentElement.style.setProperty('--n-map', NIGHT.map); document.documentElement.style.setProperty('--n-lines', NIGHT.lines);
-  nightEl.textContent = on ? '\u2600 Day mode' : '\u263E Night mode';
+  nightEl.innerHTML = on ? SUN_SVG : MOON_SVG;
   if (remember) try { localStorage.setItem('night', on ? '1' : '0'); } catch (e) {}
 }
 nightEl.onclick = () => setNight(!document.body.classList.contains('night'), true);
