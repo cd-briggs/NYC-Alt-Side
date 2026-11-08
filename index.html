@@ -772,6 +772,14 @@ let drawSeq = 0, building = false, redrawAfter = false;
 const llOf = p => p.ll || (p.ll = toLL(p[0], p[1]));   // projecting back to lat/lng is slow: do it once per point
 
 // Draws into a fresh layer group and swaps it in when finished, so the old lines stay on screen meanwhile. A newer draw() cancels this one.
+const weightFor = z => z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+let drawnSeq = 0;
+// Zoom changed but not the data or the colors: only the line widths differ, so restyle the existing lines instead of rebuilding them.
+function restyleWeights() {
+  const w = weightFor(map.getZoom());
+  layer.eachLayer(l => l.setStyle({ weight: l.options.nd ? Math.max(3, w - 1) : w }));
+  drawnZoom = map.getZoom();
+}
 async function draw() {
   if (building) { redrawAfter = true; return; }
   const my = ++drawSeq, t0 = performance.now();
@@ -779,7 +787,9 @@ async function draw() {
   if (!chunks.length) { layer.clearLayers(); return; }
   const nl = L.layerGroup();
   const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), mode = getMode(), durMin = mode === 'dur' ? durMinutes() : 0;
-  const z = map.getZoom(), weight = z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+  const z = map.getZoom(), weight = weightFor(z);
+  const ck = Math.floor(start.getTime() / 60000) + '|' + mode + '|' + durMin;   // evaluation results are cached on each curb piece under this key
+  const colorOf = r => r.metered ? null : mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start);
   let nodata = 0, run = null;
   const flush = () => {
     if (!run) return;
@@ -797,13 +807,14 @@ async function draw() {
       await yieldNow(); sliceT = performance.now();
       if (my !== drawSeq || building) return;           // superseded by a newer draw or a data reload
     }
-    const ev = evalChunk(ch, start, opts, memo);
+    let ev;
+    if (ch._ck === ck) ev = ch._ev; else { ev = evalChunk(ch, start, opts, memo); ch._ck = ck; ch._ev = ev; ch._col = ev ? colorOf(ev.res) : null; }
     let style, key;
-    if (!ev) { nodata++; style = { color: '#9a9a9a', weight: Math.max(3, weight - 1), opacity: 0.85 }; key = 'nodata'; }
+    if (!ev) { nodata++; style = { color: '#9a9a9a', weight: Math.max(3, weight - 1), opacity: 0.85, nd: true }; key = 'nodata'; }
     else {
       const r = ev.res;
       const stripe = !!r.metered && z > 16;       // zoom 16 and wider: metered curb is just a blue line
-      style = { color: r.metered && !stripe ? METER_BLUE : mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start), weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
+      style = { color: r.metered ? (stripe ? (mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start)) : METER_BLUE) : ch._col, weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
       key = [style.color, style.metered, ch.faceKey, ev.hydrant ? 'H' : '', ev.parsed.length].join('|');
     }
     const joins = run && run.key === key && run.last[0] === ch.a[0] && run.last[1] === ch.a[1];
@@ -812,7 +823,7 @@ async function draw() {
   }
   flush();
   if (my !== drawSeq || building) return;
-  map.addLayer(nl); map.removeLayer(layer); layer = nl;
+  map.addLayer(nl); map.removeLayer(layer); layer = nl; drawnSeq = my;
   statusEl.textContent = `${faces.size} block faces, ${hydrantData.length} hydrants, ${nodata} of ${chunks.length} curb pieces have no data`;
   lastDrawMs = performance.now() - t0;
 }
@@ -1173,6 +1184,15 @@ map.on('zoom', showZoom); showZoom();
 let timer;
 map.on('moveend', () => {
   clearTimeout(timer);
+  // Fast path: still inside the loaded area (a zoom or a small pan), so nothing to load. Refresh right away instead of after the delay below.
+  if (loadedBounds && map.getZoom() >= (window.TILE_INDEX ? MIN_LINE_ZOOM : 16) && loadedBounds.contains(map.getBounds())) {
+    if (map.getZoom() !== drawnZoom) {
+      const z = map.getZoom();
+      if (drawnSeq === drawSeq && !building && drawnZoom != null && (drawnZoom > 16) === (z > 16)) restyleWeights(); else draw();
+    }
+    drawHydrants();
+    return;
+  }
   timer = setTimeout(() => {
     const zNow = map.getZoom();
     const minZ = window.TILE_INDEX ? MIN_LINE_ZOOM : 16;
