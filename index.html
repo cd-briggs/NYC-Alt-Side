@@ -1163,7 +1163,7 @@ function setNight(on, remember) {
   applyNightPaint(on);
   if (remember) try { localStorage.setItem('night', on ? '1' : '0'); } catch (e) {}
 }
-nightEl.onclick = e => { const b = e.target.closest('button'); if (b) setNight(b.dataset.n === '1', true); };
+nightEl.onclick = () => setNight(!document.body.classList.contains('night'), true);   // tapping either icon flips the mode
 { let v = null; try { v = localStorage.getItem('night'); } catch (e) {} setNight(v === null ? matchMedia('(prefers-color-scheme: dark)').matches : v === '1', false); }
 document.getElementById('togBus').onclick = e => { busOn = !busOn; e.currentTarget.classList.toggle('off', !busOn); updateTransit(); };
 const zoomInfoEl = document.getElementById('zoomInfo');
