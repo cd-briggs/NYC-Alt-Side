@@ -161,7 +161,7 @@ const toLL = (x, y) => { const [lng, lat] = proj4('EPSG:2263', 'EPSG:4326', [x, 
 const SIGNS_URL = 'https://data.cityofnewyork.us/resource/nfid-uabd.json';
 const STREETS_URL = 'https://data.cityofnewyork.us/resource/inkn-q76z.json';  // NYC Street Centerline (CSCL)
 const HYDRANT_URL = 'https://data.cityofnewyork.us/resource/5bgh-vtsn.json';
-const OFFSET_FT = 14;      // draw lines this far from the street centerline
+const OFFSET_FT = 17;      // draw lines this far from the street centerline (was 14; moved out 3 ft so thicker lines grow onto the sidewalk, not toward the street)
 const CHUNK_FT = 20;       // lines are split into pieces this long
 const CORNER_PAD_FT = 4;   // extra gap at intersections, beyond half the cross street's width
 const HYDRANT_FT = 15;     // NY VTL 1202: no stopping/standing/parking within 15 ft of a hydrant (NYC rule text not yet verified)
@@ -741,7 +741,7 @@ async function draw() {
   if (!chunks.length) { layer.clearLayers(); return; }
   const nl = L.layerGroup();
   const start = getStart(), opts = { suspended: parseSuspended() }, memo = new Map(), mode = getMode(), durMin = mode === 'dur' ? durMinutes() : 0;
-  const z = map.getZoom(), weight = z >= 18 ? 8 : z >= 17 ? 6 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+  const z = map.getZoom(), weight = z >= 19 ? 16 : z >= 18 ? 12 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
   let nodata = 0, run = null;
   const flush = () => {
     if (!run) return;
@@ -1024,7 +1024,7 @@ map.on('click', e => {
   if (building || !chunks.length || map.getZoom() < 13) return;
   const [x, y] = toSP(e.latlng.lat, e.latlng.lng);
   const ftPerPx = 156543.03 * Math.cos(e.latlng.lat * Math.PI / 180) / 2 ** map.getZoom() * 3.28084;
-  const ch = pickChunk(x, y, Math.max(12, ftPerPx * 12));     // about 12 screen pixels
+  const ch = pickChunk(x, y, Math.max(16, ftPerPx * 16));     // about 16 screen pixels (fat finger)
   if (!ch) return;
   const ctx = { start: getStart(), opts: { suspended: parseSuspended() }, memo: new Map() }, ev = evalChunk(ch, ctx.start, ctx.opts, ctx.memo);
   // keep the popup clear of the control panel: pan the map so it opens below the panel, and cap its height to the room left
