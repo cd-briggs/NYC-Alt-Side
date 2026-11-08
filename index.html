@@ -117,10 +117,9 @@
     <div class="small">Shows the best and longest parking spots available.</div>
     <div class="bar"><span style="background:#b3001b">Never</span><span style="background:#7e3fc0">Opens Later</span><span style="background:#f57c00">Move Today</span><span style="background:#FFF200;color:#222;text-shadow:none" id="tmrBar">Tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2 Days</span><span style="background:hsl(120,68%,40%)">4 Days</span><span style="background:hsl(135,70%,26%)">7 Days</span></div>
    </div>
-   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span><span class="chip tog" id="togHouse" title="Tap to hide or show house numbers (zoomed in)">123 House #</span></div>
+   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span></div>
   </div>
   <details id="more"><summary>Details</summary>
-    <div class="row"><span title="Optional. Dates you type here are treated as alternate side parking suspended (broom signs ignored). Empty = street cleaning applies every day.">ASP suspended</span><input type="text" id="susp" placeholder="Dates, e.g. 2026-11-26, 2026-12-25"></div>
     <div id="status">Loading…</div>
     <div id="timing"></div>
   </details>
@@ -144,8 +143,8 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"></script>
-<script src="core.js"></script>
-<script src="signs.js"></script>
+<script src="core.js?v=3"></script>
+<script src="signs.js?v=3"></script>
 <!-- NYC data cut into small tiles (made by bake-tiles.py); the page loads only the tiles in view. If missing, the page queries NYC live (slow). -->
 <script src="tiles/index.js" onerror="console.log('no tile index; will query NYC live')"></script>
 <script>
@@ -191,13 +190,12 @@ function updateTransit() {
 map.on('zoomend', updateTransit);
 // House numbers: the map tiles carry them but the Bright style never draws them, so add a text layer (visible from HOUSE_MIN_ZOOM)
 const HOUSE_MIN_ZOOM = 18 - ZOOM_SHIFT;
-let housesOn = true;
 function addHouseNumbers() {
   const g = baseGL.getMaplibreMap();
   if (g.getLayer('housenumber_own') || !g.getSource('openmaptiles')) return;
   const ref = g.getLayer('highway-name-minor'), font = ref && g.getLayoutProperty('highway-name-minor', 'text-font');
   g.addLayer({ id: 'housenumber_own', type: 'symbol', source: 'openmaptiles', 'source-layer': 'housenumber', minzoom: HOUSE_MIN_ZOOM,
-    layout: { 'text-field': '{housenumber}', 'text-size': 11, 'text-font': font || ['Noto Sans Regular'], 'visibility': housesOn ? 'visible' : 'none' },
+    layout: { 'text-field': '{housenumber}', 'text-size': 11, 'text-font': font || ['Noto Sans Regular'], 'visibility': 'visible' },
     paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1.2 } });
 }
 const BASE_HIDE = ['poi_r1', 'poi_r7', 'poi_r20'];                 // the only point of interest kept is poi_transit (bus, rail, airport icons)
@@ -227,11 +225,11 @@ const HYDRANT_SHAPES = `<rect x="14.4" y="1.8" width="3.2" height="3.6" rx="1"/>
   <rect x="8" y="24.5" width="16" height="4.8" rx="1.2"/>`;
 const HYDRANT_SVG = (px) => `<svg viewBox="0 0 32 32" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg">
   <g fill="#fff" stroke="#fff" stroke-width="3.2" stroke-linejoin="round">${HYDRANT_SHAPES}</g><g fill="#d00000">${HYDRANT_SHAPES}</g></svg>`;
-{ const T = C.TOMORROW; document.getElementById('tmrBar').style.background = `linear-gradient(to right, hsl(${T.h0},${T.s}%,${T.l0}%), hsl(${T.h1},${T.s}%,${T.l1}%))`; }
+{ const T = C.TOMORROW || { h0: 57, h1: 82, s: 100, l0: 50, l1: 46 }; document.getElementById('tmrBar').style.background = `linear-gradient(to right, hsl(${T.h0},${T.s}%,${T.l0}%), hsl(${T.h1},${T.s}%,${T.l1}%))`; }
 document.getElementById('legendHydrant').innerHTML = HYDRANT_SVG(14);
 
 SignRender.install();
-const whenEl = document.getElementById('when'), suspEl = document.getElementById('susp');
+const whenEl = document.getElementById('when');
 const statusEl = document.getElementById('status'), timingEl = document.getElementById('timing');
 function setNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); whenEl.value = d.toISOString().slice(0, 16); }
 setNow();
@@ -281,7 +279,6 @@ document.querySelectorAll('#durRow button').forEach(b => b.onclick = () => {
   const end = h[0] === '+' || h[0] === '-' ? Math.max(st + 3600000, new Date(whenEndEl.value).getTime() + (h[0] === '-' ? -1 : 1) * 3600000) : st + (+h) * 3600000;
   whenEndEl.value = localStr(end); showDur(); draw();
 });
-suspEl.onchange = () => draw();
 
 // ---------- small geometry helpers ----------
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -664,7 +661,10 @@ function buildLabels(ways) {
 }
 
 // ---------- evaluation + drawing ----------
-function parseSuspended() { return new Set(suspEl.value.split(/[ ,]+/).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s))); }
+// DSNY alternate side parking suspensions for 2026 (city holiday calendar as reported by PIX11, checked 2026-11-07). Meters still apply on these days.
+// Snow/emergency suspensions are not in this list. Add 2027 dates here when the city publishes them.
+const ASP_SUSPENDED = new Set(['2026-01-01','2026-01-06','2026-01-19','2026-02-12','2026-02-16','2026-02-17','2026-02-18','2026-03-03','2026-03-20','2026-03-21','2026-04-02','2026-04-03','2026-04-08','2026-04-09','2026-04-10','2026-05-14','2026-05-22','2026-05-23','2026-05-25','2026-05-27','2026-05-28','2026-06-19','2026-07-03','2026-07-04','2026-07-23','2026-08-15','2026-09-07','2026-09-12','2026-09-13','2026-09-21','2026-09-26','2026-09-27','2026-10-03','2026-10-04','2026-10-12','2026-11-01','2026-11-03','2026-11-08','2026-11-11','2026-11-26','2026-12-08','2026-12-25']);
+function parseSuspended() { return ASP_SUSPENDED; }
 
 function evalChunk(ch, start, opts, memo) {
   if (ch.hydrant) {
@@ -1083,7 +1083,6 @@ setTimeout(() => map.invalidateSize(), 300);
 
 updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
-document.getElementById('togHouse').onclick = e => { housesOn = !housesOn; e.currentTarget.classList.toggle('off', !housesOn); const g = baseGL.getMaplibreMap(); if (g.getLayer('housenumber_own')) g.setLayoutProperty('housenumber_own', 'visibility', housesOn ? 'visible' : 'none'); };
 // Lift zoom buttons and credits above whatever part of the map is under the browser's bottom bar
 function setLift() {
   const vv = window.visualViewport, mapBottom = document.getElementById('map').getBoundingClientRect().bottom;
