@@ -98,6 +98,29 @@
   .thanks { margin-top: 4px; font-weight: 600; }
   .hyl svg { vertical-align: middle; }
   .hdot { background: #d00000; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 1px #0008; }
+
+  /* Night mode (body.night): the base map is inverted and dimmed with a CSS filter; curb lines keep their colors (only slightly dimmed). Tweak the NIGHT object in the script. */
+  body.night .leaflet-tile-pane { filter: var(--n-map); }
+  body.night .leaflet-overlay-pane, body.night .leaflet-transit-pane { filter: var(--n-lines); }
+  body.night { background: #111; }
+  body.night #ctl, body.night #showPanel { background: #1c1e23f2; color: #e6e6e6; box-shadow: 0 2px 12px #000a; }
+  body.night #ctl input[type=datetime-local], body.night #ctl input[type=text] { background: #2a2d34; color: #eee; border-color: #484c55; color-scheme: dark; }
+  body.night #ctl button { background: #2a2d34; border-color: #484c55; color: #ddd; }
+  body.night #ctl button:hover { background: #363a43; }
+  body.night #durRow button.adj { background: #22344f; border-color: #3f6199; color: #9cc2ff; }
+  body.night #durText { background: #22344f; color: #9cc2ff; }
+  body.night #modes { background: #2a2d34; }
+  body.night #modes label { color: #aaa; }
+  body.night #modes label:has(input:checked) { background: #454a55; color: #fff; box-shadow: none; }
+  body.night .row > span, body.night .chip, body.night .small, body.night #status, body.night #timing, body.night #sources, body.night #sources summary, body.night #more summary, body.night #lowerToggle { color: #b5b9c2; }
+  body.night #lowerToggle, body.night #legend, body.night #more { border-color: #3a3d44 !important; }
+  body.night #hidePanel svg, body.night #showPanel svg { stroke: #ddd; }
+  body.night .leaflet-popup-content-wrapper, body.night .leaflet-popup-tip { background: #1c1e23; color: #e6e6e6; }
+  body.night .leaflet-popup-content .s { color: #c4c8d0; }
+  body.night .leaflet-bar a { background: #1c1e23; color: #eee; border-color: #484c55; }
+  body.night .leaflet-control-attribution { background: #1c1e23b3 !important; color: #999; }
+  body.night .leaflet-control-attribution a { color: #8ab4f8; }
+  #togNight { cursor: pointer; user-select: none; }
 </style>
 </head>
 <body>
@@ -126,6 +149,7 @@
     <div class="bar"><span style="background:#b3001b">Never</span><span style="background:#7e3fc0">Opens Later</span><span style="background:#f57c00">Move Today</span><span style="background:#FFF200;color:#222;text-shadow:none" id="tmrBar">Tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2 Days</span><span style="background:hsl(120,68%,40%)">4 Days</span><span style="background:hsl(135,70%,26%)">7 Days</span></div>
    </div>
    <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span></div>
+   <div class="chips"><span class="chip" id="togNight"></span></div>
   </div>
   <details id="more"><summary>Details</summary>
     <div id="status">Loading…</div>
@@ -1093,11 +1117,30 @@ updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
 // Lift zoom buttons and credits above whatever part of the map is under the browser's bottom bar
 function setLift() {
-  const vv = window.visualViewport, mapBottom = document.getElementById('map').getBoundingClientRect().bottom;
+  const mapEl = document.getElementById('map');
+  if (navigator.standalone) {   // home-screen app: size the map to the whole screen, including the home-indicator strip that vh units leave out
+    const portrait = innerHeight > innerWidth, sh = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    mapEl.style.height = sh + 'px';
+    const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(probe);
+    const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; probe.remove();
+    document.documentElement.style.setProperty('--lift', Math.round(safe) + 'px'); map.invalidateSize(); return;
+  }
+  const vv = window.visualViewport, mapBottom = mapEl.getBoundingClientRect().bottom;
   const lift = vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0;
   document.documentElement.style.setProperty('--lift', lift + 'px');
 }
 setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
+// Night mode. Tweak these values (map = filter on the base map, lines = filter on the curb lines, brightness 1 = unchanged).
+const NIGHT = { map: 'invert(1) hue-rotate(180deg) brightness(0.72) contrast(0.9) saturate(0.8)', lines: 'brightness(0.9)' };
+const nightEl = document.getElementById('togNight');
+function setNight(on, remember) {
+  document.body.classList.toggle('night', on);
+  document.documentElement.style.setProperty('--n-map', NIGHT.map); document.documentElement.style.setProperty('--n-lines', NIGHT.lines);
+  nightEl.textContent = on ? '\u2600 Day mode' : '\u263E Night mode';
+  if (remember) try { localStorage.setItem('night', on ? '1' : '0'); } catch (e) {}
+}
+nightEl.onclick = () => setNight(!document.body.classList.contains('night'), true);
+{ let v = null; try { v = localStorage.getItem('night'); } catch (e) {} setNight(v === null ? matchMedia('(prefers-color-scheme: dark)').matches : v === '1', false); }
 document.getElementById('togBus').onclick = e => { busOn = !busOn; e.currentTarget.classList.toggle('off', !busOn); updateTransit(); };
 const zoomInfoEl = document.getElementById('zoomInfo');
 const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + map.getZoom(); };
