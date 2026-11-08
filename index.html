@@ -16,9 +16,10 @@
   body { position: fixed; inset: 0; width: 100%; touch-action: none; }
   #ctl, #showPanel { touch-action: manipulation; }
   /* Map fills the whole screen, even behind Safari's bottom bar (100lvh = height with the bars collapsed); the zoom buttons and credits are lifted above the bar */
-  #map { position: fixed; inset: 0; }
-  .leaflet-bottom { bottom: calc(100vh - 100dvh); bottom: max(calc(100lvh - 100dvh), env(safe-area-inset-bottom)); }
-  #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 316px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
+  #map { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; }
+  /* --lift (set by JS) = how much of the map sits under the browser's bottom bar right now, so zoom buttons and credits stay visible */
+  .leaflet-bottom { bottom: var(--lift, 0px); }
+  #ctl { position: absolute; z-index: 1000; top: 10px; left: 54px; width: 340px; background: #fffffff2; padding: 10px 12px; border-radius: 12px; box-shadow: 0 2px 12px #0003; font-size: 13px; color: #222; }
   #ctl label { cursor: pointer; }
   #modes { display: flex; background: #e9ecf1; border-radius: 9px; padding: 2px; margin-bottom: 8px; }
   #modes label { flex: 1; text-align: center; padding: 5px 4px; border-radius: 7px; font-weight: 600; font-size: 12.5px; color: #555; }
@@ -26,19 +27,21 @@
   #modes input { display: none; }
   .row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
   .row > span { flex: none; font-weight: 600; font-size: 12px; color: #444; }
-  #ctl input[type=datetime-local], #ctl input[type=text] { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; }
+  #ctl { --fh: 30px; }
+  #ctl input[type=datetime-local], #ctl input[type=text] { flex: 1; min-width: 0; height: var(--fh); box-sizing: border-box; font: inherit; font-size: 12.5px; padding: 0 6px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; }
+  #ctl .row button, #ctl .acts button { height: var(--fh); box-sizing: border-box; padding-top: 0 !important; padding-bottom: 0 !important; }
   #ctl button { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid #c9ced6; border-radius: 6px; background: #f6f7f9; cursor: pointer; }
   #ctl button:hover { background: #e9ecf1; }
   #durRow { gap: 4px; }
   #durRow button { flex: 1; padding: 4px 0; }
   #durRow button.adj { background: #dbe8fb; border-color: #8fb0d9; color: #1a4f9c; font-weight: 600; }
   #durRow button.adj:first-of-type { margin-left: 6px; }
-  #durText { font-weight: 600; font-size: 12.5px; color: #1a4f9c; text-align: center; padding: 4px 0; border-radius: 6px; background: #eef4fd; white-space: nowrap; }
+  #durText { font-weight: 600; font-size: 12.5px; color: #1a4f9c; text-align: center; padding: 4px 0; border-radius: 6px; background: #eef4fd; white-space: nowrap; height: var(--fh); box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
   /* Start/Arrive and End rows share one grid: label | date field | right column (Go+Now, or the duration), so both fields are the same width */
   .row.g { display: grid; grid-template-columns: 44px minmax(0, 1fr) 104px; gap: 6px; }
   .row.g .acts { display: flex; gap: 4px; }
   .row.g .acts button { flex: 1; padding: 4px 0; }
-  .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; min-height: 28px; }
+  .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; height: var(--fh); line-height: normal; }
   #top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
   #top #modes { flex: 1; margin-bottom: 0; }
   #hidePanel { padding: 4px 8px !important; line-height: 0; }
@@ -50,12 +53,13 @@
   /* phones: panel spans the screen width, centered, with room for the notch */
   @media (max-width: 600px) {
     #ctl { left: 10px; right: 10px; width: auto; top: max(10px, env(safe-area-inset-top)); max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box; }
+    #ctl { --fh: 38px; }
     #ctl input[type=text] { font-size: 16px; }   /* 16 px stops iOS Safari zooming the page when the field is focused */
   }
   #legend { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e6eb; }
   .bar { display: flex; gap: 2px; margin: 5px 0; font-size: 11px; color: #fff; text-align: center; }
   .bar span { flex: 1; padding: 3px 1px; border-radius: 4px; text-shadow: 0 0 2px #0008; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
-  .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0; }
   .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #333; white-space: nowrap; }
   .chip i { display: inline-block; width: 18px; height: 9px; border-radius: 3px; }
   .locdot { background: none; border: 0; }
@@ -96,27 +100,27 @@
   <div class="row g" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><div class="acts"><button id="goTime">Go</button><button id="nowBtn">Now</button></div></div>
   <div class="row g" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"><span id="durText"></span></div>
   <div class="row" id="durRow" style="display:none"><span>Stay</span><button data-h="1">1h</button><button data-h="2">2h</button><button data-h="3">3h</button><button data-h="5">5h</button><button data-h="-1" class="adj">&minus;1h</button><button data-h="+1" class="adj">+1h</button></div>
-  <div class="row" id="addrRow"><input type="text" id="addr" placeholder="Search address or location"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
+  <div class="row" id="addrRow"><input type="text" id="addr" placeholder="Search address or location name"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
   <button id="lowerToggle"></button>
   <div id="lower">
   <div id="legend">
    <div id="legendNow" style="display:none">
-    <div class="small">Open or not at the chosen time (follows the clock until you pick a time; Now resumes)</div>
+    <div class="small">Shows what&rsquo;s open now, or at your arrival time.</div>
     <div class="bar"><span style="background:#2e9e3f">Open Now</span><span style="background:#FFF200;color:#222;text-shadow:none">Opens &le; 1h</span><span style="background:#f57c00">Expires &le; 1h</span><span style="background:#7e3fc0">Opens &gt; 1h</span><span style="background:#b3001b">Never</span></div>
    </div>
    <div id="legendDur" style="display:none">
-    <div class="small">Is it legal from the start time through the end time?</div>
+    <div class="small">Shows where you can park for a specific time window.</div>
     <div class="bar"><span style="background:#2e9e3f">Great Spot!</span><span style="background:#f57c00">Leave Early</span><span style="background:#7e3fc0">Arrive Later</span><span style="background:#b3001b">Never</span></div>
    </div>
    <div id="legendPlan">
-    <div class="small">How long you can legally stay from your arrival time</div>
-    <div class="bar"><span style="background:#b3001b">Never</span><span style="background:#7e3fc0">Opens Later</span><span style="background:#f57c00">Move Today</span><span style="background:linear-gradient(to right,#FFF200,hsl(57,100%,40%));color:#222;text-shadow:none">Tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2 Days</span><span style="background:hsl(120,68%,40%)">4 Days</span><span style="background:hsl(135,70%,26%)">7 Days</span></div>
+    <div class="small">Shows the best and longest parking spots available.</div>
+    <div class="bar"><span style="background:#b3001b">Never</span><span style="background:#7e3fc0">Opens Later</span><span style="background:#f57c00">Move Today</span><span style="background:#FFF200;color:#222;text-shadow:none" id="tmrBar">Tomorrow AM&rarr;PM</span><span style="background:hsl(105,65%,55%)">2 Days</span><span style="background:hsl(120,68%,40%)">4 Days</span><span style="background:hsl(135,70%,26%)">7 Days</span></div>
    </div>
-   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span></div>
+   <div class="chips"><span class="chip"><i class="mtr"></i>Metered</span><span class="chip"><i class="gray"></i>No Data</span><span class="chip tog" id="togHydrant" title="Tap to hide or show hydrants"><span class="hyl" id="legendHydrant"></span>Hydrant 15 ft</span><span class="chip tog" id="togBus" title="Tap to hide or show bus stops"><img src="bus-icon.png" width="14" height="14" alt="">Bus Stop</span><span class="chip tog" id="togHouse" title="Tap to hide or show house numbers (zoomed in)">123 House #</span></div>
   </div>
   <details id="more"><summary>Details</summary>
-    <div class="row"><span title="Dates when DSNY suspended alternate side parking (broom signs ignored)">ASP suspended</span><input type="text" id="susp" placeholder="2026-11-26, 2026-12-25"></div>
+    <div class="row"><span title="Optional. Dates you type here are treated as alternate side parking suspended (broom signs ignored). Empty = street cleaning applies every day.">ASP suspended</span><input type="text" id="susp" placeholder="Dates, e.g. 2026-11-26, 2026-12-25"></div>
     <div id="status">Loading…</div>
     <div id="timing"></div>
   </details>
@@ -130,7 +134,7 @@
       <li>Rules: NY Vehicle and Traffic Law &sect;1202 (hydrant distance)</li>
       <li>Built with <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>, <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>, <a href="https://proj4js.org" target="_blank" rel="noopener">proj4js</a></li>
     </ul>
-    <div class="thanks">Thank you, NYC! I <span style="color:#d00000">&hearts;</span> NY</div>
+    <div class="thanks">I <span style="color:#d00000">&hearts;</span> NY &ndash; By <a href="https://claytonbriggs.com" target="_blank" rel="noopener">Clayton Daniel Briggs</a></div>
   </details>
   <div id="zoomInfo" class="small"></div>
   </div>
@@ -165,7 +169,7 @@ const LATERAL_FT = 70;     // ...and this far sideways from the line through the
 const STRETCH_END_FT = 12; // reach past the end signs of a zone that has two or more signs
 const BOROUGH = { 1: 'Manhattan', 2: 'Bronx', 3: 'Brooklyn', 4: 'Queens', 5: 'Staten Island' };
 
-const map = L.map('map', { preferCanvas: true, minZoom: 12, maxZoom: 20, zoomControl: false }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
+const map = L.map('map', { preferCanvas: true, inertia: false, minZoom: 12, maxZoom: 20, zoomControl: false }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
 // Base map: OpenFreeMap Bright (vector tiles, sharp at any zoom, no key), trimmed (see basemap-lab.html).
 // OWN_LABELS draws street names + one-way arrows from NYC centerline data; leave off while the base map already shows them.
 const OWN_LABELS = false;
@@ -185,6 +189,17 @@ function updateTransit() {
   if (transitFallback) { const g = baseGL.getMaplibreMap(); if (g.getLayer('poi_transit')) g.setLayoutProperty('poi_transit', 'visibility', show ? 'visible' : 'none'); }
 }
 map.on('zoomend', updateTransit);
+// House numbers: the map tiles carry them but the Bright style never draws them, so add a text layer (visible from HOUSE_MIN_ZOOM)
+const HOUSE_MIN_ZOOM = 18 - ZOOM_SHIFT;
+let housesOn = true;
+function addHouseNumbers() {
+  const g = baseGL.getMaplibreMap();
+  if (g.getLayer('housenumber_own') || !g.getSource('openmaptiles')) return;
+  const ref = g.getLayer('highway-name-minor'), font = ref && g.getLayoutProperty('highway-name-minor', 'text-font');
+  g.addLayer({ id: 'housenumber_own', type: 'symbol', source: 'openmaptiles', 'source-layer': 'housenumber', minzoom: HOUSE_MIN_ZOOM,
+    layout: { 'text-field': '{housenumber}', 'text-size': 11, 'text-font': font || ['Noto Sans Regular'], 'visibility': housesOn ? 'visible' : 'none' },
+    paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1.2 } });
+}
 const BASE_HIDE = ['poi_r1', 'poi_r7', 'poi_r20'];                 // the only point of interest kept is poi_transit (bus, rail, airport icons)
 const BASE_COLORS = { 'highway-path': '#d3d3d3' };                 // paths: light gray
 function styleBase() {
@@ -192,6 +207,7 @@ function styleBase() {
   for (const id of BASE_HIDE) if (g.getLayer(id)) g.setLayoutProperty(id, 'visibility', 'none');
   if (g.getLayer('poi_transit')) { g.setLayoutProperty('poi_transit', 'text-field', '');   // icons only, no stop names
     if (TRANSIT_ON_TOP) g.setLayoutProperty('poi_transit', 'visibility', 'none'); }          // ...drawn by the layer above the curb lines instead
+  addHouseNumbers();
   for (const [id, c] of Object.entries(BASE_COLORS)) if (g.getLayer(id)) g.setPaintProperty(id, 'line-color', c);
 }
 { const g = baseGL.getMaplibreMap(); if (g.isStyleLoaded()) styleBase(); else g.once('load', styleBase); }
@@ -211,6 +227,7 @@ const HYDRANT_SHAPES = `<rect x="14.4" y="1.8" width="3.2" height="3.6" rx="1"/>
   <rect x="8" y="24.5" width="16" height="4.8" rx="1.2"/>`;
 const HYDRANT_SVG = (px) => `<svg viewBox="0 0 32 32" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg">
   <g fill="#fff" stroke="#fff" stroke-width="3.2" stroke-linejoin="round">${HYDRANT_SHAPES}</g><g fill="#d00000">${HYDRANT_SHAPES}</g></svg>`;
+{ const T = C.TOMORROW; document.getElementById('tmrBar').style.background = `linear-gradient(to right, hsl(${T.h0},${T.s}%,${T.l0}%), hsl(${T.h1},${T.s}%,${T.l1}%))`; }
 document.getElementById('legendHydrant').innerHTML = HYDRANT_SVG(14);
 
 SignRender.install();
@@ -1066,6 +1083,14 @@ setTimeout(() => map.invalidateSize(), 300);
 
 updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
+document.getElementById('togHouse').onclick = e => { housesOn = !housesOn; e.currentTarget.classList.toggle('off', !housesOn); const g = baseGL.getMaplibreMap(); if (g.getLayer('housenumber_own')) g.setLayoutProperty('housenumber_own', 'visibility', housesOn ? 'visible' : 'none'); };
+// Lift zoom buttons and credits above whatever part of the map is under the browser's bottom bar
+function setLift() {
+  const vv = window.visualViewport, mapBottom = document.getElementById('map').getBoundingClientRect().bottom;
+  const lift = vv ? Math.max(0, Math.round(mapBottom - (vv.height + vv.offsetTop))) : 0;
+  document.documentElement.style.setProperty('--lift', lift + 'px');
+}
+setLift(); ['resize', 'orientationchange'].forEach(t => addEventListener(t, setLift)); if (window.visualViewport) { visualViewport.addEventListener('resize', setLift); visualViewport.addEventListener('scroll', setLift); } setTimeout(setLift, 300);
 document.getElementById('togBus').onclick = e => { busOn = !busOn; e.currentTarget.classList.toggle('off', !busOn); updateTransit(); };
 const zoomInfoEl = document.getElementById('zoomInfo');
 const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + map.getZoom(); };

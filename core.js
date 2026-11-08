@@ -157,6 +157,9 @@
   // yellow = must move tomorrow (#FFF200, deepening the later you can leave),
   // green = stay past tomorrow (light = day after tomorrow, deepening to dark green at the 7-day limit).
   const dayNum = d => Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000 + 0.5);
+  // "Tomorrow AM->PM" yellow range: h = hue (57 yellow, 80 lime, 105 = the 2 Days green), s = saturation %, l = lightness % (low l turns olive/brown, so keep it 44+).
+  // 0 = tomorrow morning, 1 = tomorrow night. Edit these five numbers to retune; the legend bar follows automatically.
+  const TOMORROW = { h0: 57, h1: 82, s: 100, l0: 50, l1: 46 };
   function colorFor(min, never, start) {
     if (never) return '#b3001b';
     if (min <= 0) return '#7e3fc0';
@@ -165,7 +168,7 @@
     if (ahead <= 0) return '#f57c00';
     if (ahead === 1) {
       const f = Math.sqrt((end.getHours() * 60 + end.getMinutes()) / 1440);
-      return 'hsl(57,100%,' + Math.round(50 - f * 10) + '%)';   // same yellow as #FFF200, deepening later in tomorrow like the greens deepen with longer stays
+      return 'hsl(' + Math.round(TOMORROW.h0 + f * (TOMORROW.h1 - TOMORROW.h0)) + ',' + TOMORROW.s + '%,' + Math.round(TOMORROW.l0 + f * (TOMORROW.l1 - TOMORROW.l0)) + '%)';   // yellow shifting toward lime later in tomorrow
     }
     const f = Math.min(1, (ahead - 2) / 5);
     return 'hsl(' + Math.round(105 + f * 30) + ',' + Math.round(65 + f * 5) + '%,' + Math.round(55 - f * 29) + '%)';
@@ -217,6 +220,6 @@
     return Math.min(ax, ay) >= 0.4 * Math.max(ax, ay) ? [major, minor] : [major];
   }
 
-  const api = { parseSign, activeAt, stay, colorFor, colorNow, colorDur, fmt, normStreet, cardinal, cardinals, dateKey, CAP, PROHIBIT };
+  const api = { TOMORROW, parseSign, activeAt, stay, colorFor, colorNow, colorDur, fmt, normStreet, cardinal, cardinals, dateKey, CAP, PROHIBIT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ParkCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
