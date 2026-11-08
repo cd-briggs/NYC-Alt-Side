@@ -32,10 +32,12 @@
   .row.g { display: grid; grid-template-columns: 44px minmax(0, 1fr) 104px; gap: 6px; }
   .row.g .acts { display: flex; gap: 4px; }
   .row.g .acts button { flex: 1; padding: 4px 0; }
-  .row.g input { width: 100%; box-sizing: border-box; min-width: 0; }
-  #addrRow #searchBtn { padding: 4px 7px; }
-  #ctl.noSearch #addr, #ctl.noSearch #goBtn { display: none; }
-  #ctl.noSearch #addrRow { justify-content: flex-start; }
+  .row.g input { display: block; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; -webkit-appearance: none; appearance: none; min-height: 28px; }
+  #top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  #top #modes { flex: 1; margin-bottom: 0; }
+  #hidePanel { padding: 5px 9px !important; font-size: 14px !important; line-height: 1; }
+  #showPanel { position: absolute; z-index: 1000; top: max(10px, env(safe-area-inset-top)); left: 10px; width: 42px; height: 42px; padding: 0; display: none; align-items: center; justify-content: center; background: #fffffff2; border: 0; border-radius: 12px; box-shadow: 0 2px 12px #0003; cursor: pointer; }
+  #ctl.panelOff { display: none; }
   #lowerToggle { display: block; width: 100%; margin: 6px 0 0; padding: 2px 0 !important; border: 0 !important; border-top: 1px solid #e3e6eb !important; border-radius: 0 !important; background: none !important; color: #666; font-size: 11.5px !important; }
   #ctl.lowerOff #lower { display: none; }
   #ctl.lowerOff #lowerToggle { margin-top: 4px; }
@@ -82,12 +84,13 @@
 </head>
 <body>
 <div id="map"></div>
+<button id="showPanel" title="Show the panel"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
 <div id="ctl">
-  <div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div>
+  <div id="top"><div id="modes"><label><input type="radio" name="mode" value="plan" checked> Overnight</label><label><input type="radio" name="mode" value="now"> Realtime</label><label><input type="radio" name="mode" value="dur"> Duration</label></div><button id="hidePanel" title="Hide this panel (full-screen map)">&#x2715;</button></div>
   <div class="row g" id="arriveRow"><span id="whenLabel">Arrive</span><input type="datetime-local" id="when"><div class="acts"><button id="goTime">Go</button><button id="nowBtn">Now</button></div></div>
   <div class="row g" id="endRow" style="display:none"><span>End</span><input type="datetime-local" id="whenEnd"><span id="durText"></span></div>
   <div class="row" id="durRow" style="display:none"><span>Stay</span><button data-h="1">1h</button><button data-h="2">2h</button><button data-h="3">3h</button><button data-h="5">5h</button><button data-h="-1" class="adj">&minus;1h</button><button data-h="+1" class="adj">+1h</button></div>
-  <div class="row" id="addrRow"><button id="searchBtn" title="Show or hide the address box"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.6"/><path d="M10 10l4.5 4.5"/></svg></button><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
+  <div class="row" id="addrRow"><input type="text" id="addr" placeholder="Go to an address"><button id="goBtn">Go</button><button id="locBtn" title="Use my current location"><svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:-3px" fill="none" stroke="#2784F5" stroke-width="1.6"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.4" fill="#2784F5" stroke="none"/><path d="M8 0.8v3M8 12.2v3M0.8 8h3M12.2 8h3"/></svg></button></div>
   <div id="msg"></div>
   <button id="lowerToggle"></button>
   <div id="lower">
@@ -1013,12 +1016,20 @@ function showPin(ll, color, text, accuracy) {
   } else pin = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(map).bindTooltip(text);
   map.setView(ll, Math.max(map.getZoom(), 17));
 }
-document.getElementById('locBtn').onclick = () => {
+document.getElementById('locBtn').onclick = async () => {
   msgEl.textContent = '';
   if (!navigator.geolocation) { msgEl.textContent = 'This browser cannot share your location.'; return; }
   msgEl.style.color = '#555'; msgEl.textContent = 'Finding you…';
-  navigator.geolocation.getCurrentPosition(pos => { msgEl.textContent = ''; showPin([pos.coords.latitude, pos.coords.longitude], '#2784F5', 'You are here', pos.coords.accuracy); },
-    err => { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Location failed: ' + err.message + (err.code === 1 && /iPhone|iPad/.test(navigator.userAgent) ? '. iPhone: Settings > Privacy & Security > Location Services > Safari Websites > While Using; then in Safari tap aA > Website Settings > Location > Allow.' : ''); }, { enableHighAccuracy: true, timeout: 15000 });
+  const ok = pos => { msgEl.textContent = ''; showPin([pos.coords.latitude, pos.coords.longitude], '#2784F5', 'You are here', pos.coords.accuracy); };
+  const fail = async err => {
+    let perm = '';
+    try { perm = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch (e) {}
+    msgEl.style.color = '#b3001b';
+    msgEl.textContent = 'Location failed: ' + err.message + ' (code ' + err.code + (perm ? ', Safari permission: ' + perm : '') + ')'
+      + (err.code === 1 ? '. If you just changed a setting, reload this page (pull down or tap the reload icon) and try again.' : '');
+  };
+  // first try high accuracy (GPS); if that fails for any reason, retry once with the quick network fix
+  navigator.geolocation.getCurrentPosition(ok, () => navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }), { enableHighAccuracy: true, timeout: 8000 });
 };
 async function goAddress() {
   const q0 = document.getElementById('addr').value.trim(); if (!q0) return;
@@ -1033,15 +1044,17 @@ async function goAddress() {
 document.getElementById('goBtn').onclick = goAddress;
 document.getElementById('addr').onkeydown = e => { if (e.key === 'Enter') goAddress(); };
 
-// Collapsible panel parts (remembered between visits): everything from the legend down, and the address box (shrinks to the magnifier icon)
+// Collapsible panel: everything from the legend down (remembered between visits), or the whole panel (hide button, then a menu icon brings it back)
 const ctlEl = document.getElementById('ctl'), lowerBtn = document.getElementById('lowerToggle');
 const saved = k => { try { return localStorage.getItem(k) === '1'; } catch (e) { return false; } };
 const save = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
 function setLower(off) { ctlEl.classList.toggle('lowerOff', off); lowerBtn.textContent = off ? '\u25BE Legend & more' : '\u25B4 Hide legend & more'; save('lowerOff', off); }
-function setSearch(off) { ctlEl.classList.toggle('noSearch', off); save('noSearch', off); }
+const showBtn = document.getElementById('showPanel');
+function setPanel(off) { ctlEl.classList.toggle('panelOff', off); showBtn.style.display = off ? 'flex' : 'none'; if (off) map.closePopup(); }
 lowerBtn.onclick = () => setLower(!ctlEl.classList.contains('lowerOff'));
-document.getElementById('searchBtn').onclick = () => { const off = !ctlEl.classList.contains('noSearch'); setSearch(off); if (!off) document.getElementById('addr').focus(); };
-setLower(saved('lowerOff')); setSearch(saved('noSearch'));
+document.getElementById('hidePanel').onclick = () => setPanel(true);
+showBtn.onclick = () => setPanel(false);
+setLower(saved('lowerOff'));
 
 updateTransit();
 document.getElementById('togHydrant').onclick = e => { hydrantsOn = !hydrantsOn; e.currentTarget.classList.toggle('off', !hydrantsOn); drawHydrants(); };
