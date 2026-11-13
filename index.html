@@ -212,7 +212,8 @@ const LATERAL_FT = 70;     // ...and this far sideways from the line through the
 const STRETCH_END_FT = 12; // reach past the end signs of a zone that has two or more signs
 const BOROUGH = { 1: 'Manhattan', 2: 'Bronx', 3: 'Brooklyn', 4: 'Queens', 5: 'Staten Island' };
 
-const map = L.map('map', { preferCanvas: true, inertia: false, minZoom: 12, maxZoom: 20, zoomControl: false, zoomSnap: 0.1 }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
+const map = L.map('map', { preferCanvas: true, inertia: false, minZoom: 12, maxZoom: 20, zoomControl: false, zoomSnap: matchMedia('(pointer: coarse)').matches ? 0.25 : 1 })   // fine zoom steps on touch screens only; the mouse wheel on desktop redrew too often with them
+ .setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
 // Base map: OpenFreeMap Bright (vector tiles, sharp at any zoom, no key), trimmed (see basemap-lab.html).
 // OWN_LABELS draws street names + one-way arrows from NYC centerline data; leave off while the base map already shows them.
 const OWN_LABELS = false;
@@ -618,7 +619,7 @@ function* trimWays(ways) {
     // Round end caps where the line stops at a cross street or a dead end; where the same street simply continues into the next way, the two share a corner instead (contA / contB)
     const info = e => { const l = ends.get(key(e)), others = l.filter(o => o !== w); return { dead: !others.length, cont: others.length === 1 && others[0].nm === w.nm && others[0] !== w ? others[0] : null }; };
     const i0 = info(e0), i1 = info(e1);
-    w.capA = c0 > 0 || i0.dead; w.capB = c1 > 0 || i1.dead;
+    w.trimB = c1; w.capA = c0 > 0 || i0.dead; w.capB = c1 > 0 || i1.dead;
     w.contA = c0 === 0 ? i0.cont : null; w.contB = c1 === 0 ? i1.cont : null;
   }
 }
@@ -743,6 +744,43 @@ function* buildChunks(ways) {
   chunkGrid = makeGrid(chunks.map(ch => ({ x: ch.mid[0], y: ch.mid[1], ch })), 60);
   faceChunks = new Map();
   for (const ch of chunks) if (ch.faceKey) { let a = faceChunks.get(ch.faceKey); if (!a) faceChunks.set(ch.faceKey, a = []); a.push(ch); }
+  buildCorners(ways);
+}
+
+// Corner connectors: where two streets meet, a thin curved line joins the end of one street's curb line to the next street's, around the block corner
+// (a quadratic curve through the point where the two curb lines would cross). Neutral color: it is not a parking verdict (corners are not validated).
+let corners = [];
+function buildCorners(ways) {
+  corners = [];
+  const nodes = new Map();
+  for (const w of ways) if (w.tpts) for (const atStart of [true, false]) {
+    const P = w.pts, n = P.length, node = atStart ? P[0] : P[n - 1];
+    let o = null; for (let k = 1; k < n && !o; k++) { const q = atStart ? P[k] : P[n - 1 - k], dx = q[0] - node[0], dy = q[1] - node[1], L = Math.hypot(dx, dy); if (L >= 5) o = [dx / L, dy / L]; }
+    if (!o) continue;
+    const key = atStart ? w.k0 : w.k1; let a = nodes.get(key); if (!a) nodes.set(key, a = { node, arms: [] });
+    a.arms.push({ w, d: o, ang: Math.atan2(o[1], o[0]), end: atStart ? w.tpts[0] : w.tpts[w.tpts.length - 1] });
+  }
+  for (const { node, arms } of nodes.values()) {
+    if (arms.length < 2 || (buildBox && (node[0] < buildBox[0] || node[0] > buildBox[2] || node[1] < buildBox[1] || node[1] > buildBox[3]))) continue;
+    if (arms.every(r => r.w.nm === arms[0].w.nm)) continue;
+    arms.sort((p, q) => p.ang - q.ang);
+    for (let i = 0; i < arms.length; i++) {
+      const A = arms[i], B = arms[(i + 1) % arms.length];
+      if (A === B || isNoPark(A.w) || isNoPark(B.w)) continue;
+      let gap = B.ang - A.ang; if (gap <= 0) gap += 2 * Math.PI;
+      if (gap < 0.26 || gap > 2.9) continue;                                     // too sharp, or nearly straight
+      const PA = [A.end[0] - A.d[1] * OFFSET_FT, A.end[1] + A.d[0] * OFFSET_FT];    // A's curb line end on its ccw side
+      const PB = [B.end[0] + B.d[1] * OFFSET_FT, B.end[1] - B.d[0] * OFFSET_FT];    // B's curb line end on its cw side
+      const ux = -A.d[0], uy = -A.d[1], vx = -B.d[0], vy = -B.d[1], den = ux * vy - uy * vx;
+      if (Math.abs(den) < 0.2) continue;
+      const rx = PB[0] - PA[0], ry = PB[1] - PA[1], sA = (rx * vy - ry * vx) / den, sB = (rx * uy - ry * ux) / den;
+      if (sA <= 0 || sB <= 0 || sA > 120 || sB > 120) continue;
+      if (!pickChunk(PA[0], PA[1], 10) || !pickChunk(PB[0], PB[1], 10)) continue;   // both curb lines must really be drawn there
+      const X = [PA[0] + ux * sA, PA[1] + uy * sA], pts = [];
+      for (let k = 0; k <= 8; k++) { const t = k / 8, m = 1 - t; pts.push([m * m * PA[0] + 2 * m * t * X[0] + t * t * PB[0], m * m * PA[1] + 2 * m * t * X[1] + t * t * PB[1]]); }
+      corners.push(pts);
+    }
+  }
 }
 
 // The curb piece nearest a click (x, y in state plane ft), within tol ft, or null.
@@ -865,7 +903,7 @@ let drawnSeq = 0;
 // Zoom changed but not the data or the colors: only the line widths differ, so restyle the existing lines instead of rebuilding them.
 function restyleWeights() {
   const w = weightFor(map.getZoom());
-  layer.eachLayer(l => { const ww = l.options.nd ? Math.max(3, w - 1) : w; if (l.setRadius) l.setRadius(ww / 2); else l.setStyle({ weight: ww }); });   // end-cap dots are circle markers
+  layer.eachLayer(l => { const ww = l.options.nd ? Math.max(3, w - 1) : w; if (l.setRadius) l.setRadius(ww / 2); else l.setStyle({ weight: l.options.corner ? Math.max(1.5, w * 0.5) : ww }); });   // end-cap dots are circle markers
   drawnZoom = map.getZoom();
 }
 async function draw() {
@@ -914,6 +952,7 @@ async function draw() {
     run.pts.push(ch.b); run.last = ch.b; run.capB = !!ch.capB;
   }
   flush();
+  if (z >= 15.5) for (const pts of corners) L.polyline(pts.map(llOf), { color: '#b4aea6', weight: Math.max(1.5, weight * 0.5), opacity: 0.9, lineCap: 'round', interactive: false, corner: true }).addTo(nl);
   if (my !== drawSeq || building) return;
   map.addLayer(nl); map.removeLayer(layer); layer = nl; drawnSeq = my;
   statusEl.textContent = `${faces.size} block faces, ${hydrantData.length} hydrants, ${nodata} of ${chunks.length} curb pieces have no data`;
