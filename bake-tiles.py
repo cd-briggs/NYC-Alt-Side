@@ -10,6 +10,7 @@ Each feature lives in exactly one tile (signs and hydrants by their own x/y, str
 so the page loads the tiles in view plus a one-tile ring and just concatenates them.
 Tile file: window.__tile("c_r", {d:[sign texts], s:[signs], h:[hydrants], t:[streets]});
 tiles/index.js: window.TILE_INDEX = {size, created, tiles:{"c_r": bytes}}.
+Street row: [name, trafdir, borough, width, lines, rw_type (1 street, 2 highway, 3 bridge), number_park_lanes (-1 = unknown)].
 Sign row: [order, on_street, side, from_street, to_street, text index into d, x, y, arrow, distance_from_intersection].
 """
 import json, math, os, subprocess, sys, time
@@ -68,8 +69,8 @@ def cached(name, fetch):
 
 BAD = "upper(full_street_name) like '%OPAS%' OR upper(full_street_name) like '%PEDESTRIAN%' OR upper(full_street_name) like '%PATH%' OR upper(full_street_name) like '%ARCHES%' OR upper(full_street_name) like '%BRG%' OR upper(full_street_name) like '%BRDG%'"
 print('Downloading (cached ones are skipped)…')
-streets = cached('streets', lambda: get_all('https://data.cityofnewyork.us/resource/inkn-q76z.json', {
-    '$select': 'full_street_name,trafdir,boroughcode,streetwidth,the_geom',
+streets = cached('streets2', lambda: get_all('https://data.cityofnewyork.us/resource/inkn-q76z.json', {
+    '$select': 'full_street_name,trafdir,boroughcode,streetwidth,rw_type,number_park_lanes,the_geom',
     '$where': f"rw_type in ('1','2','3') AND trafdir != 'NV' AND NOT({BAD})"}, 'streets', 20000))
 hyd = cached('hydrants', lambda: get_all('https://data.cityofnewyork.us/resource/5bgh-vtsn.json', {
     '$select': 'latitude,longitude,point_x,point_y,unitid'}, 'hydrants', 40000))
@@ -103,7 +104,8 @@ for s in streets:
     mid = line[len(line) // 2]
     x, y = sp(mid[1], mid[0])
     tiles[key(x, y)]['t'].append([s['full_street_name'], s.get('trafdir'), s.get('boroughcode'), float(s.get('streetwidth') or 0),
-                                  [[[round(c[0], 6), round(c[1], 6)] for c in ln] for ln in g['coordinates']]])
+                                  [[[round(c[0], 6), round(c[1], 6)] for c in ln] for ln in g['coordinates']],
+                                  int(s.get('rw_type') or 0), int(s['number_park_lanes']) if s.get('number_park_lanes') not in (None, '') else -1])
 
 os.makedirs(OUT, exist_ok=True)
 for fn in os.listdir(OUT):

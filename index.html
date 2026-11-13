@@ -41,6 +41,8 @@
   #ctl .row button, #ctl .acts button { height: var(--fh); box-sizing: border-box; padding-top: 0 !important; padding-bottom: 0 !important; }
   #ctl button { font: inherit; font-size: 12.5px; padding: 4px 9px; border: 1px solid #c9ced6; border-radius: 6px; background: #f6f7f9; cursor: pointer; }
   #ctl button:hover { background: #e9ecf1; }
+  #ctl #locBtn.on { background: #dbe8fb; border-color: #8fb0d9; }   /* following your location */
+  body.night #ctl #locBtn.on { background: #22344f; border-color: #3f6199; }
   #durRow { gap: 4px; }
   #durRow button { flex: 1; padding: 4px 0; }
   #durRow button.adj { background: #dbe8fb; border-color: #8fb0d9; color: #1a4f9c; font-weight: 600; }
@@ -83,8 +85,8 @@
   #more summary { cursor: pointer; font-size: 11.5px; color: #666; }
   #status { font-size: 11.5px; color: #555; margin-top: 4px; }
   #timing { font-size: 11px; color: #777; }
-  .gray { background: #9a9a9a; height: 3px !important; }
-  .mtr { background: #2784F5; height: 5px !important; }
+  .gray { background: #9a9a9a; height: 6px !important; }
+  .mtr { background: #2784F5; height: 6px !important; }   /* same height for Meter and No Data */
   .small { font-size: 11px; color: #555; }
   .leaflet-popup-content { font-size: 12px; overflow: auto; }
   .leaflet-popup-content .s { color: #444; margin: 2px 0; }
@@ -185,10 +187,10 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"></script>
-<script src="core.js?v=3"></script>
-<script src="signs.js?v=3"></script>
+<script src="core.js?v=4"></script>
+<script src="signs.js?v=4"></script>
 <!-- NYC data cut into small tiles (made by bake-tiles.py); the page loads only the tiles in view. If missing, the page queries NYC live (slow). -->
-<script src="tiles/index.js" onerror="console.log('no tile index; will query NYC live')"></script>
+<script src="tiles/index.js?v=4" onerror="console.log('no tile index; will query NYC live')"></script>
 <script>
 const C = ParkCore;
 // NY State Plane Long Island (US feet): the CRS used by sign_x_coord / sign_y_coord
@@ -210,7 +212,7 @@ const LATERAL_FT = 70;     // ...and this far sideways from the line through the
 const STRETCH_END_FT = 12; // reach past the end signs of a zone that has two or more signs
 const BOROUGH = { 1: 'Manhattan', 2: 'Bronx', 3: 'Brooklyn', 4: 'Queens', 5: 'Staten Island' };
 
-const map = L.map('map', { preferCanvas: true, inertia: false, minZoom: 12, maxZoom: 20, zoomControl: false }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
+const map = L.map('map', { preferCanvas: true, inertia: false, minZoom: 12, maxZoom: 20, zoomControl: false, zoomSnap: 0.1 }).setView([40.7128, -74.0060], 16);  // City Hall, Manhattan
 // Base map: OpenFreeMap Bright (vector tiles, sharp at any zoom, no key), trimmed (see basemap-lab.html).
 // OWN_LABELS draws street names + one-way arrows from NYC centerline data; leave off while the base map already shows them.
 const OWN_LABELS = false;
@@ -248,6 +250,10 @@ function styleBase() {
   if (g.getLayer('poi_transit')) { g.setLayoutProperty('poi_transit', 'text-field', '');   // icons only, no stop names
     if (TRANSIT_ON_TOP) g.setLayoutProperty('poi_transit', 'visibility', 'none'); }          // ...drawn by the layer above the curb lines instead
   addHouseNumbers();
+  for (const id of ['road_oneway', 'road_oneway_opposite']) if (g.getLayer(id)) {      // one-way arrows: full opacity (style default 0.5) and a bit larger
+    g.setPaintProperty(id, 'icon-opacity', 1);
+    g.setLayoutProperty(id, 'icon-size', ['interpolate', ['linear'], ['zoom'], 15, 0.6, 19, 1.2]);
+  }
   for (const [id, c] of Object.entries(BASE_COLORS)) if (g.getLayer(id)) g.setPaintProperty(id, 'line-color', c);
 }
 { const g = baseGL.getMaplibreMap(); if (g.isStyleLoaded()) styleBase(); else g.once('load', styleBase); }
@@ -267,7 +273,7 @@ const HYDRANT_SHAPES = `<rect x="14.4" y="1.8" width="3.2" height="3.6" rx="1"/>
   <rect x="8" y="24.5" width="16" height="4.8" rx="1.2"/>`;
 const HYDRANT_SVG = (px) => `<svg viewBox="0 0 32 32" width="${px}" height="${px}" xmlns="http://www.w3.org/2000/svg">
   <g fill="#fff" stroke="#fff" stroke-width="3.2" stroke-linejoin="round">${HYDRANT_SHAPES}</g><g fill="#d00000">${HYDRANT_SHAPES}</g></svg>`;
-{ const T = C.TOMORROW || { h0: 57, h1: 82, s: 100, l0: 50, l1: 46 }; document.getElementById('tmrBar').style.background = `linear-gradient(to right, hsl(${T.h0},${T.s}%,${T.l0}%), hsl(${T.h1},${T.s}%,${T.l1}%))`; }
+{ const T = C.TOMORROW || { h0: 44, h1: 58, s: 100, l0: 50, l1: 47 }; document.getElementById('tmrBar').style.background = `linear-gradient(to right, hsl(${T.h0},${T.s}%,${T.l0}%), hsl(${T.h1},${T.s}%,${T.l1}%))`; }
 document.getElementById('legendHydrant').innerHTML = HYDRANT_SVG(14);
 
 SignRender.install();
@@ -506,7 +512,7 @@ function topoLocate(f, p) {
 
 function* resolveFaces(ways) {
   wayFaces = new Map();
-  const nodeNames = new Map(), byName = new Map();
+  const nodeNames = new Map(), byName = new Map(), byNameOk = new Map();   // byNameOk: only ways the city says have a parking lane
   let wi = 0;
   for (const w of ways) {
     if ((++wi & 255) === 0) yield;
@@ -514,6 +520,7 @@ function* resolveFaces(ways) {
     w.len = w.cum[w.cum.length - 1]; w.k0 = nodeKey(w.pts[0]); w.k1 = nodeKey(w.pts[w.pts.length - 1]);
     for (const k of [w.k0, w.k1]) { let st = nodeNames.get(k); if (!st) nodeNames.set(k, st = new Set()); st.add(w.nm); }
     let a = byName.get(w.nm); if (!a) byName.set(w.nm, a = []); a.push(w);
+    if (w.pl !== 0) { let b = byNameOk.get(w.nm); if (!b) byNameOk.set(w.nm, b = []); b.push(w); }
   }
   let fj = 0;
   for (const f of faces.values()) {
@@ -521,8 +528,13 @@ function* resolveFaces(ways) {
     f.topo = null;
     const zs = f.zs.filter(z => isFinite(z.d)), list = byName.get(C.normStreet(f.street));
     if (!zs.length || !list) continue;
-    const path = shortestPath(list, nodeNames, C.normStreet(f.from), C.normStreet(f.to));
-    if (!path || Math.max(...zs.map(z => z.d)) > path.len + 150) continue;      // not found, or does not match the signs' distances
+    const maxD = Math.max(...zs.map(z => z.d)), good = q => q && maxD <= q.len + 150;      // found, and matches the signs' distances
+    let path = shortestPath(list, nodeNames, C.normStreet(f.from), C.normStreet(f.to));
+    if (path && path.pieces.some(pc => pc.way.pl === 0) && byNameOk.has(C.normStreet(f.street))) {   // the route runs along a roadway with no parking lane (e.g. a parkway's main road): prefer a parallel service road
+      const alt = shortestPath(byNameOk.get(C.normStreet(f.street)), nodeNames, C.normStreet(f.from), C.normStreet(f.to));
+      if (good(alt) && alt.len < path.len * 1.3 + 50) path = alt;
+    }
+    if (!good(path)) continue;
     // which side of the direction of travel is this block side on? (compass letter of the side vs. left of the path)
     const mid = [0.1, 0.3, 0.5, 0.7, 0.9].map(t => dirAt(path, t * path.len));
     const letter = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] }[f.side];
@@ -575,6 +587,19 @@ function trimPolyline(pts, a, b) {
   out.push(at(total - b));
   return out;
 }
+// Douglas-Peucker: drop vertices within tol ft of the straight line between their neighbors (digitizing jitter makes straight streets look wiggly once offset to the curb).
+function simplifyPts(pts, tol) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [i, j] = stack.pop(); let md = 0, mi = -1;
+    for (let k = i + 1; k < j; k++) { const d = distToSeg(pts[k], pts[i], pts[j]); if (d > md) { md = d; mi = k; } }
+    if (mi >= 0 && md > tol) { keep[mi] = 1; stack.push([i, mi], [mi, j]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+const SIMPLIFY_FT = 1.2;
 function* trimWays(ways) {
   const key = p => Math.round(p[0] * 2) + '|' + Math.round(p[1] * 2);   // endpoints that coincide within ~0.5 ft are the same node
   const ends = new Map();
@@ -586,25 +611,78 @@ function* trimWays(ways) {
     if ((++wi & 255) === 0) yield;
     // cut by half the widest *other* street that meets this end (the same street continuing is not an intersection)
     const cut = e => { let t = 0; for (const o of ends.get(key(e))) if (o !== w && o.nm !== w.nm) t = Math.max(t, (o.width || 30) / 2); return t ? t + CORNER_PAD_FT : 0; };
-    const c0 = cut(w.pts[0]);
-    w.tpts = trimPolyline(w.pts, c0, cut(w.pts[w.pts.length - 1]));
+    const e0 = w.pts[0], e1 = w.pts[w.pts.length - 1], c0 = cut(e0), c1 = cut(e1);
+    const t = trimPolyline(w.pts, c0, c1);
+    w.tpts = t && simplifyPts(t, SIMPLIFY_FT);
     w.trimA = c0;                                   // ft cut from the start (needed to place curb pieces along the original way)
+    // Round end caps where the line stops at a cross street or a dead end; where the same street simply continues into the next way, the two share a corner instead (contA / contB)
+    const info = e => { const l = ends.get(key(e)), others = l.filter(o => o !== w); return { dead: !others.length, cont: others.length === 1 && others[0].nm === w.nm && others[0] !== w ? others[0] : null }; };
+    const i0 = info(e0), i1 = info(e1);
+    w.capA = c0 > 0 || i0.dead; w.capB = c1 > 0 || i1.dead;
+    w.contA = c0 === 0 ? i0.cont : null; w.contB = c1 === 0 ? i1.cont : null;
   }
 }
 
+// Offset vector (OFFSET_FT to side s) at every vertex of a polyline: the average of the two adjoining segment normals, lengthened (capped at 2x) so the
+// offset line stays OFFSET_FT from both segments. Neighboring pieces then share their corner point: no wedge gaps on curves. tanA / tanB = travel
+// direction of the next way past the start / end, so a curve that spans two ways stays joined.
+function offsetVecs(pts, s, tanA, tanB) {
+  const n = pts.length, segN = [];
+  for (let i = 0; i + 1 < n; i++) { const dx = pts[i + 1][0] - pts[i][0], dy = pts[i + 1][1] - pts[i][1], L = Math.hypot(dx, dy) || 1; segN.push([-dy / L * s, dx / L * s]); }
+  const nrm = t => t ? [-t[1] * s, t[0] * s] : null;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = i === 0 ? (nrm(tanA) || segN[0]) : segN[i - 1], b = i === n - 1 ? (nrm(tanB) || segN[n - 2]) : segN[i];
+    let mx = a[0] + b[0], my = a[1] + b[1]; const ml = Math.hypot(mx, my);
+    if (ml < 1e-6) { out.push([b[0] * OFFSET_FT, b[1] * OFFSET_FT]); continue; }
+    mx /= ml; my /= ml;
+    const k = 1 / Math.max(0.5, mx * b[0] + my * b[1]);
+    out.push([mx * OFFSET_FT * k, my * OFFSET_FT * k]);
+  }
+  return out;
+}
+// unit travel direction just past an end of w, taken from the street that continues there (null if none)
+function contTangent(w, atStart) {
+  const o = atStart ? w.contA : w.contB, P = o && o.tpts; if (!P || P.length < 2) return null;
+  const node = atStart ? w.k0 : w.k1, n = P.length, oStarts = o.k0 === node;
+  const v = atStart ? (oStarts ? [P[0][0] - P[1][0], P[0][1] - P[1][1]] : [P[n - 1][0] - P[n - 2][0], P[n - 1][1] - P[n - 2][1]])
+                    : (oStarts ? [P[1][0] - P[0][0], P[1][1] - P[0][1]] : [P[n - 2][0] - P[n - 1][0], P[n - 2][1] - P[n - 1][1]]);
+  const L = Math.hypot(v[0], v[1]); return L ? [v[0] / L, v[1] / L] : null;
+}
+
+// Roads where parking is obviously not a thing: highways, bridges, expressways, parkway main roads, park drives. Drawn only if the sign data names a block face there.
+const NOPARK_NAME = /\b(EXPY|HWY|TPKE|FDR|BQE|LIE|BRG|BRDG|BRIDGE|TUNNEL|RAMP|TRANSVERSE)\b|\bPKWY\b|\b(E|W|N|S|CENTER)( LAKE| MEADOW)? DR\b|\bWELLHOUSE DR\b|\bPARK DR\b/;   // names are normalized (EAST -> E): Prospect Park's W DR, S LAKE DR, WELLHOUSE DR; Central Park's transverses
+const isNoPark = w => w.rw === 2 || (w.pl === 0 && (w.rw === 3 || NOPARK_NAME.test(w.nm)));   // rw 2 = highway, 3 = bridge; pl = parking lanes (0 on 18k ordinary streets too, so it only counts together with the type or name)
+const MEDIAN_FT = 110;    // a same-name roadway this close beside a curb line, on its side and running parallel, means that curb line would sit in a median
+// Does a same-name parallel roadway lie beyond this curb point (on the side the curb piece faces)?
+function facesParallel(cands, mid, dx, dy, nx, ny) {
+  for (const o of cands) {
+    const P = o.tpts;
+    for (let i = 0; i + 1 < P.length; i++) {
+      const a = P[i], b = P[i + 1], sx = b[0] - a[0], sy = b[1] - a[1], L2 = sx * sx + sy * sy; if (!L2) continue;
+      const t = Math.max(0, Math.min(1, ((mid[0] - a[0]) * sx + (mid[1] - a[1]) * sy) / L2)), qx = a[0] + sx * t, qy = a[1] + sy * t;
+      if (Math.hypot(qx - mid[0], qy - mid[1]) > MEDIAN_FT) continue;
+      if (Math.abs((sx * dx + sy * dy) / Math.sqrt(L2)) < 0.85) continue;              // not parallel
+      if ((qx - mid[0]) * nx + (qy - mid[1]) * ny > 15) return true;                    // lies beyond the curb line, on its side
+    }
+  }
+  return false;
+}
+const wayBox = pts => { let lx = Infinity, ly = Infinity, hx = -Infinity, hy = -Infinity; for (const p of pts) { if (p[0] < lx) lx = p[0]; if (p[0] > hx) hx = p[0]; if (p[1] < ly) ly = p[1]; if (p[1] > hy) hy = p[1]; } return [lx, ly, hx, hy]; };
+
 let buildBox = null;   // [x0, y0, x1, y1] state-plane ft: only streets touching this box get curb pieces (the rest of the loaded data is context)
 function* buildChunks(ways) {
-  const out = [];
+  const out = [], byNm = new Map();
+  for (const w of ways) if (w.tpts) { w.bb = wayBox(w.tpts); let a = byNm.get(w.nm); if (!a) byNm.set(w.nm, a = []); a.push(w); }
   let wi = 0;
   for (const w of ways) {
     if ((++wi & 15) === 0) yield;
     const pts = w.tpts; if (!pts) continue;
-    if (buildBox) {
-      let lx = Infinity, ly = Infinity, hx = -Infinity, hy = -Infinity;
-      for (const p of pts) { if (p[0] < lx) lx = p[0]; if (p[0] > hx) hx = p[0]; if (p[1] < ly) ly = p[1]; if (p[1] > hy) hy = p[1]; }
-      if (hx < buildBox[0] || lx > buildBox[2] || hy < buildBox[1] || ly > buildBox[3]) continue;
-    }
-    const wf = wayFaces.get(w);
+    if (buildBox && (w.bb[2] < buildBox[0] || w.bb[0] > buildBox[2] || w.bb[3] < buildBox[1] || w.bb[1] > buildBox[3])) continue;
+    const wf = wayFaces.get(w), noPark = isNoPark(w);
+    const cands = (byNm.get(w.nm) || []).filter(o => o !== w && o.bb[0] <= w.bb[2] + MEDIAN_FT && o.bb[2] >= w.bb[0] - MEDIAN_FT && o.bb[1] <= w.bb[3] + MEDIAN_FT && o.bb[3] >= w.bb[1] - MEDIAN_FT);
+    const tanA = contTangent(w, true), tanB = contTangent(w, false);
+    const offs = { 1: offsetVecs(pts, 1, tanA, tanB), '-1': offsetVecs(pts, -1, tanA, tanB) };
     let segStart = 0;                                         // ft along the trimmed line at the start of this segment
     for (let i = 0; i + 1 < pts.length; i++) {
       const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
@@ -612,17 +690,19 @@ function* buildChunks(ways) {
       const dx = (x1 - x0) / len, dy = (y1 - y0) / len, segAt = segStart; segStart += len;
       for (const s of [1, -1]) {
         const nx = -dy * s, ny = dx * s;                  // normal pointing to this side
+        const o0 = offs[s][i], o1 = offs[s][i + 1];
         const wanted = new Set(C.cardinals(nx, ny).map(c => w.nm + '|' + c));
         const n = Math.max(1, Math.round(len / CHUNK_FT));
         for (let k = 0; k < n; k++) {
           const t0 = k / n, t1 = (k + 1) / n;
-          const pt = t => [x0 + (x1 - x0) * t + nx * OFFSET_FT, y0 + (y1 - y0) * t + ny * OFFSET_FT];
+          const pt = t => { const u = t <= 0 ? 0 : t >= 1 ? 1 : t; return [x0 + (x1 - x0) * t + o0[0] + (o1[0] - o0[0]) * u, y0 + (y1 - y0) * t + o0[1] + (o1[1] - o0[1]) * u]; };
           const a = pt(t0), b = pt(t1), mid = pt((t0 + t1) / 2);
-          let faceKey = null, u, bestScore = Infinity;
+          if (cands.length && facesParallel(cands, mid, dx, dy, nx, ny)) continue;     // inside a median: no parking, no line
+          let faceKey = null, u, bestScore = Infinity, via = '';
           if (wf) for (const e of wf) {                                                // block sides resolved from the street network
             if (((e.forward ? s : -s) === 1) !== e.f.leftSide) continue;               // wrong side of the street for this block side
             const pos = (w.trimA || 0) + segAt + ((t0 + t1) / 2) * len;                 // ft along the original way
-            faceKey = e.f.key; u = e.offset + (e.forward ? pos : w.len - pos); break;
+            faceKey = e.f.key; u = e.offset + (e.forward ? pos : w.len - pos); via = 'topo'; break;
           }
           if (!faceKey)
           for (const ik of wanted) for (const f of faceIdx.get(ik) || []) {           // backup: block sides traced through their sign poles
@@ -631,18 +711,19 @@ function* buildChunks(ways) {
             const loc = locate(f, mid); if (!loc || loc.lat > LATERAL_FT) continue;
             const outside = Math.max(0, f.dmin - loc.u, loc.u - f.dmax); if (outside > GAP_FT) continue;
             const score = outside * 2 + loc.lat;
-            if (score < bestScore) { bestScore = score; faceKey = f.key; u = loc.u; }
+            if (score < bestScore) { bestScore = score; faceKey = f.key; u = loc.u; via = 'fit'; }
           }
           if (!faceKey) {                                                              // safety net: nearest sign of this street and side
             let bd = MAX_ASSIGN_FT;
             nearItems(signGrid, mid[0], mid[1], MAX_ASSIGN_FT, c => {
               if (!wanted.has(c.ik)) return;
-              const d = Math.hypot(mid[0] - c.x, mid[1] - c.y); if (d < bd) { bd = d; faceKey = c.key; }
+              const d = Math.hypot(mid[0] - c.x, mid[1] - c.y); if (d < bd) { bd = d; faceKey = c.key; via = 'near'; }
             });
             const ff = faceKey && faces.get(faceKey);                                  // e.g. a parallel roadway: still place it along the block
             const loc = ff && (ff.topo ? topoLocate(ff, mid) : ff.path ? locate(ff, mid) : null);
             if (loc && loc.lat <= 150) u = loc.u;
           }
+          if (noPark && via !== 'topo') continue;                                      // highway, bridge, parkway main road, park drive: just the base map
           // split the piece at the hydrant span ends so the dark-red zone is exactly HYDRANT_FT either side of each hydrant
           const L0 = dist(a, b) || 1, spans = hydrantSpans(a, b, nx, ny, mid), cuts = [0];
           for (const [lo, hi] of spans) cuts.push(lo, hi);
@@ -651,7 +732,8 @@ function* buildChunks(ways) {
           for (let c = 0; c + 1 < cuts.length; c++) {
             const f0 = cuts[c], f1 = cuts[c + 1]; if (f1 - f0 < 0.3) continue;
             const sa = pt(tAt(f0)), sb = pt(tAt(f1)), sm = pt(tAt((f0 + f1) / 2));
-            out.push({ a: sa, b: sb, mid: sm, faceKey, u, name: w.name, side: s, nx, ny, hydrant: spans.some(([lo, hi]) => f0 >= lo - 0.01 && f1 <= hi + 0.01) });
+            out.push({ a: sa, b: sb, mid: sm, faceKey, u, name: w.name, side: s, nx, ny, hydrant: spans.some(([lo, hi]) => f0 >= lo - 0.01 && f1 <= hi + 0.01),
+              capA: w.capA && i === 0 && k === 0 && c === 0, capB: w.capB && i + 2 === pts.length && k === n - 1 && c === cuts.length - 2 });
           }
         }
       }
@@ -772,12 +854,18 @@ let drawSeq = 0, building = false, redrawAfter = false;
 const llOf = p => p.ll || (p.ll = toLL(p[0], p[1]));   // projecting back to lat/lng is slow: do it once per point
 
 // Draws into a fresh layer group and swaps it in when finished, so the old lines stay on screen meanwhile. A newer draw() cancels this one.
-const weightFor = z => z >= 19 ? 22 : z >= 18 ? 16 : z >= 17 ? 8 : z >= 16 ? 4 : z >= 15 ? 3 : 2;
+// Line width in px, interpolated between whole zoom levels so pinch-zoom (zoomSnap 0.1) scales it smoothly. Zoom 16 is 5.5 (was 4).
+const WEIGHTS = [[14, 2], [15, 3.5], [16, 5.5], [17, 9], [18, 15], [19, 22], [20, 28]];
+function weightFor(z) {
+  if (z <= WEIGHTS[0][0]) return WEIGHTS[0][1];
+  for (let i = 1; i < WEIGHTS.length; i++) if (z <= WEIGHTS[i][0]) { const [z0, w0] = WEIGHTS[i - 1], [z1, w1] = WEIGHTS[i]; return w0 + (w1 - w0) * (z - z0) / (z1 - z0); }
+  return WEIGHTS[WEIGHTS.length - 1][1];
+}
 let drawnSeq = 0;
 // Zoom changed but not the data or the colors: only the line widths differ, so restyle the existing lines instead of rebuilding them.
 function restyleWeights() {
   const w = weightFor(map.getZoom());
-  layer.eachLayer(l => l.setStyle({ weight: l.options.nd ? Math.max(3, w - 1) : w }));
+  layer.eachLayer(l => { const ww = l.options.nd ? Math.max(3, w - 1) : w; if (l.setRadius) l.setRadius(ww / 2); else l.setStyle({ weight: ww }); });   // end-cap dots are circle markers
   drawnZoom = map.getZoom();
 }
 async function draw() {
@@ -798,6 +886,10 @@ async function draw() {
     // metered = alternating stripes: a solid steel-blue line underneath, the status color dashed on top
     if (metered) L.polyline(ll, { color: METER_BLUE, weight: st.weight, opacity: 1, lineCap: 'butt', interactive: false }).addTo(nl);
     L.polyline(ll, { ...st, dashArray: metered ? '8 8' : null, interactive: false }).addTo(nl);
+    // rounded ends where the line stops at a cross street or a dead end (a round dot the width of the line)
+    const cap = p => L.circleMarker(p, { radius: st.weight / 2, stroke: false, fillColor: metered ? METER_BLUE : st.color, fillOpacity: metered ? 1 : st.opacity, interactive: false, nd: !!st.nd }).addTo(nl);
+    if (run.capA) cap(ll[0]);
+    if (run.capB) cap(ll[ll.length - 1]);
     run = null;
   };
   // Neighboring curb pieces with the same look and the same block face are drawn as one line.
@@ -810,16 +902,16 @@ async function draw() {
     let ev;
     if (ch._ck === ck) ev = ch._ev; else { ev = evalChunk(ch, start, opts, memo); ch._ck = ck; ch._ev = ev; ch._col = ev ? colorOf(ev.res) : null; }
     let style, key;
-    if (!ev) { nodata++; style = { color: '#9a9a9a', weight: Math.max(3, weight - 1), opacity: 0.85, nd: true }; key = 'nodata'; }
+    if (!ev) { nodata++; style = { color: '#9a9a9a', weight: Math.max(3, weight - 1), opacity: 0.85, lineCap: 'butt', nd: true }; key = 'nodata'; }
     else {
       const r = ev.res;
       const stripe = !!r.metered && z > 16;       // zoom 16 and wider: metered curb is just a blue line
       style = { color: r.metered ? (stripe ? (mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start)) : METER_BLUE) : ch._col, weight, opacity: 0.9, lineCap: 'butt', metered: stripe };
       key = [style.color, style.metered, ch.faceKey, ev.hydrant ? 'H' : '', ev.parsed.length].join('|');
     }
-    const joins = run && run.key === key && run.last[0] === ch.a[0] && run.last[1] === ch.a[1];
-    if (!joins) { flush(); run = { key, pts: [ch.a], ch, ev, style }; }
-    run.pts.push(ch.b); run.last = ch.b;
+    const joins = run && run.key === key && Math.abs(run.last[0] - ch.a[0]) < 0.1 && Math.abs(run.last[1] - ch.a[1]) < 0.1;
+    if (!joins) { flush(); run = { key, pts: [ch.a], ch, ev, style, capA: !!ch.capA }; }
+    run.pts.push(ch.b); run.last = ch.b; run.capB = !!ch.capB;
   }
   flush();
   if (my !== drawSeq || building) return;
@@ -881,7 +973,7 @@ function popupHtml(ch, ev, ctx) {
   const all = [...new Set(ev.parsed.map(p => SignRender.html(p.raw)))].join('');     // identical-looking signs shown once
   return `<b>${f.street}</b>, ${f.side} side<br>${f.from} → ${f.to}<br>${verdict}${r.metered ? `<br><b style="color:${METER_BLUE}">Metered:</b>` + (r.meterEnd < C.CAP ? ` (Ends in ${C.fmt(r.meterEnd)})` : '') : ''}` +
     `<br><span class="small">Signs applying at this spot:</span>${all}${blockSummary(ch, ctx)}` +
-    `<div class="small">Corners and crosswalks are not checked beyond the gap at intersections. The posted sign always wins.</div>`;
+    `<div class="small">Corners and crosswalks are not validated. The posted sign is the truth, always double-check before parking.</div>`;
 }
 
 // ---------- loading ----------
@@ -908,7 +1000,7 @@ function* makeWays(streets) {
   for (const s of streets) {
     if ((++si & 63) === 0) yield;
     for (const line of s.coords) ways.push({
-      name: s.name.replace(/\s+/g, ' '), nm: C.normStreet(s.name), width: s.width, oneway: s.trafdir === 'FT' ? 'yes' : s.trafdir === 'TF' ? '-1' : null,
+      name: s.name.replace(/\s+/g, ' '), nm: C.normStreet(s.name), width: s.width, rw: s.rw, pl: s.pl, oneway: s.trafdir === 'FT' ? 'yes' : s.trafdir === 'TF' ? '-1' : null,
       pts: line.map(([lng, lat]) => toSP(lat, lng)) });
   }
   yield* aliasWays(ways);
@@ -946,7 +1038,7 @@ function getTile(key) {
   if (tilePending.has(key)) return tilePending.get(key);
   const p = new Promise(res => {
     const el = document.createElement('script');
-    el.src = `tiles/${key}.js`;
+    el.src = `tiles/${key}.js?v=${TILE_INDEX.created}`;   // new bake date = new URL, so phones do not keep old tiles
     el.onload = el.onerror = () => { el.remove(); tilePending.delete(key); res(); };
     document.head.appendChild(el);
   });
@@ -969,7 +1061,7 @@ async function loadTiles(x0, y0, x1, y1, b) {
   for (const k of keys) {
     const t = tileCache.get(k); if (!t) continue;
     for (const s of t.t) if (s[4].some(line => line.some(c => c[0] >= W && c[0] <= E && c[1] >= S && c[1] <= N)))
-      streets.push({ name: s[0], trafdir: s[1], width: s[3], coords: s[4] });
+      streets.push({ name: s[0], trafdir: s[1], width: s[3], coords: s[4], rw: s[5], pl: s[6] });
     for (const r of t.s) if (r[6] >= sx0 && r[6] <= sx1 && r[7] >= sy0 && r[7] <= sy1)
       rows.push({ order_number: r[0], on_street: r[1], side_of_street: r[2], from_street: r[3], to_street: r[4], sign_description: t.d[r[5]], sign_x_coord: r[6], sign_y_coord: r[7], arrow_direction: r[8], distance_from_intersection: r[9] });
     for (const h of t.h) if (h[2] >= sx0 && h[2] <= sx1 && h[3] >= sy0 && h[3] <= sy1) hyd.push({ lat: h[0], lng: h[1], x: h[2], y: h[3], id: h[4] });
@@ -1011,12 +1103,12 @@ async function load() {
       hydLater = getJson(HYDRANT_URL + '?$limit=50000&$where=' + encodeURIComponent(`within_box(the_geom, ${S}, ${W}, ${N}, ${E})`), 'Hydrants (NYC Open Data)')
         .then(a => a.filter(h => h.point_x).map(h => ({ lat: +h.latitude, lng: +h.longitude, x: +h.point_x, y: +h.point_y, id: h.unitid })))
         .catch(e => { statusEl.textContent += ' ' + e.message + ' (hydrants skipped)'; return []; });
-      const osm = await getJson(STREETS_URL + '?$limit=50000&$select=full_street_name,trafdir,boroughcode,streetwidth,the_geom&$where=' +
+      const osm = await getJson(STREETS_URL + '?$limit=50000&$select=full_street_name,trafdir,boroughcode,streetwidth,rw_type,number_park_lanes,the_geom&$where=' +
         encodeURIComponent(`rw_type in ('1','2','3') AND trafdir != 'NV' AND NOT(upper(full_street_name) like '%OPAS%' OR upper(full_street_name) like '%PEDESTRIAN%' OR upper(full_street_name) like '%PATH%' OR upper(full_street_name) like '%ARCHES%' OR upper(full_street_name) like '%BRG%' OR upper(full_street_name) like '%BRDG%') AND intersects(the_geom, '${poly}')`), 'Streets (NYC centerline)');
       if (!Array.isArray(osm)) throw new Error('unexpected response');
       tm.streets = performance.now() - t; t = performance.now();
       statusEl.textContent = 'Loading signs…';
-      streets = osm.filter(s => s.the_geom && s.full_street_name).map(s => ({ name: s.full_street_name, trafdir: s.trafdir, width: +s.streetwidth || 0, coords: s.the_geom.coordinates }));
+      streets = osm.filter(s => s.the_geom && s.full_street_name).map(s => ({ name: s.full_street_name, trafdir: s.trafdir, width: +s.streetwidth || 0, coords: s.the_geom.coordinates, rw: +s.rw_type || 0, pl: s.number_park_lanes == null || s.number_park_lanes === '' ? -1 : +s.number_park_lanes }));
       // The signs dataset has no geographic index (a box query scans every row), so narrow by borough first.
       const boros = [...new Set(osm.map(s => BOROUGH[s.boroughcode]).filter(Boolean))];
       const where = (boros.length ? `borough in (${boros.map(n => `'${n}'`).join(',')}) AND ` : '') +
@@ -1083,28 +1175,48 @@ map.on('click', e => {
 
 // Current location and address search (address lookup goes to OpenStreetMap's Nominatim service).
 const msgEl = document.getElementById('msg');
-let pin = null;
-function showPin(ll, color, text, accuracy) {
+let pin = null;                       // address search result
+function showPin(ll, color, text) {
   if (pin) pin.remove();
-  if (accuracy) {        // current location: a plain blue locator dot (no accuracy circle), not a pin
-    pin = L.marker(ll, { icon: L.divIcon({ className: 'locdot', html: '<b></b>', iconSize: [22, 22] }), interactive: false, keyboard: false }).addTo(map);
-  } else pin = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(map).bindTooltip(text);
+  pin = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 }).addTo(map).bindTooltip(text);
   map.setView(ll, Math.max(map.getZoom(), 17));
 }
-document.getElementById('locBtn').onclick = async () => {
+// Current location: the blue dot follows you (watchPosition) and the map stays centered on it until you drag the map away.
+// Tap the locate button again to re-center (when you have dragged away) or to stop following (when centered).
+// Safari stops sending locations when the screen locks or the page is in the background.
+const locBtn = document.getElementById('locBtn');
+let watchId = null, following = false, locMarker = null, myLL = null, firstFix = true;
+function setFollow(on) { following = on; locBtn.classList.toggle('on', on); }
+function stopWatch() { if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null; setFollow(false); if (locMarker) { locMarker.remove(); locMarker = null; } myLL = null; }
+map.on('dragstart', () => { if (following) setFollow(false); });          // dragging the map lets go; the dot keeps moving
+locBtn.onclick = () => {
   msgEl.textContent = '';
   if (!navigator.geolocation) { msgEl.textContent = 'This browser cannot share your location.'; return; }
+  if (watchId !== null) {                                                  // already tracking
+    if (!following) { setFollow(true); if (myLL) map.setView(myLL, Math.max(map.getZoom(), 17)); }   // re-center and follow again
+    else stopWatch();                                                      // centered and following: turn tracking off
+    return;
+  }
   msgEl.style.color = '#555'; msgEl.textContent = 'Finding you…';
-  const ok = pos => { msgEl.textContent = ''; showPin([pos.coords.latitude, pos.coords.longitude], '#2784F5', 'You are here', pos.coords.accuracy); };
+  firstFix = true;
+  const ok = pos => {
+    msgEl.textContent = '';
+    myLL = [pos.coords.latitude, pos.coords.longitude];
+    if (!locMarker) locMarker = L.marker(myLL, { icon: L.divIcon({ className: 'locdot', html: '<b></b>', iconSize: [22, 22] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    else locMarker.setLatLng(myLL);
+    if (firstFix) { firstFix = false; setFollow(true); map.setView(myLL, Math.max(map.getZoom(), 17)); }
+    else if (following) map.panTo(myLL, { animate: true, duration: 0.6, easeLinearity: 1 });
+  };
   const fail = async err => {
+    if (err.code !== 1 && watchId !== null && myLL) return;               // a missed fix while driving: keep the last dot, keep trying
     let perm = '';
     try { perm = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch (e) {}
     msgEl.style.color = '#b3001b';
     msgEl.textContent = 'Location failed: ' + err.message + ' (code ' + err.code + (perm ? ', Safari permission: ' + perm : '') + ')'
       + (err.code === 1 ? '. If you just changed a setting, reload this page (pull down or tap the reload icon) and try again.' : '');
+    if (err.code === 1) stopWatch();
   };
-  // first try high accuracy (GPS); if that fails for any reason, retry once with the quick network fix
-  navigator.geolocation.getCurrentPosition(ok, () => navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }), { enableHighAccuracy: true, timeout: 8000 });
+  watchId = navigator.geolocation.watchPosition(ok, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 });
 };
 async function goAddress() {
   const q0 = document.getElementById('addr').value.trim(); if (!q0) return;
@@ -1113,7 +1225,7 @@ async function goAddress() {
   try {
     const r = await (await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-74.26,40.92,-73.70,40.49&q=' + encodeURIComponent(q))).json();
     if (!r.length) { msgEl.style.color = '#b3001b'; msgEl.textContent = 'No match for that address.'; return; }
-    msgEl.textContent = ''; showPin([+r[0].lat, +r[0].lon], '#d81b60', r[0].display_name);
+    msgEl.textContent = ''; setFollow(false); showPin([+r[0].lat, +r[0].lon], '#d81b60', r[0].display_name);
   } catch (e) { msgEl.style.color = '#b3001b'; msgEl.textContent = 'Address search failed: ' + e.message; }
 }
 document.getElementById('goBtn').onclick = goAddress;
@@ -1179,7 +1291,7 @@ nightEl.onclick = () => setNight(!document.body.classList.contains('night'), tru
 { let v = null; try { v = localStorage.getItem('night'); } catch (e) {} setNight(v === null ? matchMedia('(prefers-color-scheme: dark)').matches : v === '1', false); }
 document.getElementById('togBus').onclick = e => { busOn = !busOn; e.currentTarget.classList.toggle('off', !busOn); updateTransit(); };
 const zoomInfoEl = document.getElementById('zoomInfo');
-const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + map.getZoom(); };
+const showZoom = () => { zoomInfoEl.textContent = 'Zoom level: ' + Math.round(map.getZoom() * 10) / 10; };
 map.on('zoom', showZoom); showZoom();
 let timer;
 map.on('moveend', () => {

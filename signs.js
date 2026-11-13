@@ -25,6 +25,9 @@
   .sg.meter .words { padding: 5px 9px; line-height: 1.1; display: flex; align-items: center; }
   .sg.meter .tx, .sg.meter .words { color: #2d4a42; }
   .sg.meter .tx { font-size: 14px; padding-top: 2px; }
+  .sg.permit { border-color: ${GREEN}; outline: 1.5px solid ${GREEN}; outline-offset: -5px; }   /* white panel, green border and lettering (State St, Brooklyn) */
+  .sg.permit .tx, .sg.permit .tx * { color: ${GREEN}; }
+  .sg.permit .big { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
   .sg.bus { background: #1c5bb5; border-color: #1c5bb5; color: #fff; outline: 1.5px solid #fff; outline-offset: -5px; }
   .sg.bus .top { display: flex; align-items: center; gap: 8px; padding: 9px 12px 5px; }
   .sg.bus .top svg.ar { margin: 0; flex: 1; width: auto; }
@@ -74,13 +77,17 @@
     if (/^BUS STOP/.test(full)) {                                // flat white bus on blue; "No Standing" strip when the sign says so
       return `<div class="sg bus"><div class="top">${BUS}${arrow(dir, '#fff')}</div><div class="strip">${/NO STANDING/.test(full) ? 'NO STANDING' : 'BUS STOP'}</div></div>`;
     }
+    if (/^PARKING PERMITTED/.test(full) && /\d\s*(AM|PM)/.test(full)) {                // "PARKING PERMITTED Wednesday 8am-6pm ONLY": legal only in those hours
+      const when = times(rest.replace(/^PARKING PERMITTED\s*/, '').replace(/&\s*/g, '').replace(/\s*ONLY\s*$/, ''));
+      return `<div class="sg permit"><div class="tx">${ln('PARKING', 'big')}${ln('PERMITTED', 'big')}${days.map(d => ln(cap(d))).join('')}${ln(when)}${ln('ONLY', 'big')}${arrow(dir, GREEN)}</div></div>`;
+    }
     const m = full.match(/^NO (STOPPING|STANDING|PARKING)\s*(.*)$/);
     if (m) {
       const what = 'NO ' + m[1], tail = m[2].trim(), detail = /^ANYTIME$/.test(tail) ? 'Anytime' : times(tail);
       if (m[1] === 'PARKING') return `<div class="sg noparking"><div class="tx">${ln(what, 'big')}${ln(detail, 'sub2')}${arrow(dir, RED)}</div></div>`;
       return `<div class="sg red"><div class="tx">${ln(what, 'big')}${ln(detail, 'sub')}${arrow(dir, '#fff')}</div></div>`;
     }
-    return `<div class="sg"><div class="tx">${ln(times(full.replace(/\([^)]*\)/g, '').trim()))}${arrow(dir, '#444')}</div></div>`;      // anything else: plain text sign
+    return `<div class="sg"><div class="tx">${ln(times(full.replace(/\([^)]*\)/g, '').replace(/\bAVO\b/, 'AUTHORIZED VEHICLES ONLY:').trim()))}${arrow(dir, '#444')}</div></div>`;      // anything else: plain text sign
   }
   function install() { if (document.getElementById('sg-css')) return; const s = document.createElement('style'); s.id = 'sg-css'; s.textContent = CSS; document.head.appendChild(s); }
   root.SignRender = { html, install };

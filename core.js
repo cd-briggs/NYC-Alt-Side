@@ -65,8 +65,9 @@
     if (/NO STOPPING/.test(s)) p.kind = 'nostop';
     else if (/NO STANDING/.test(s)) p.kind = 'nostand';
     else if (/NO PARKING/.test(s)) p.kind = 'nopark';
+    else if (/PARKING PERMITTED/.test(s) && /\d\s*(AM|PM)/.test(s)) p.kind = 'permit';   // "PARKING PERMITTED WEDNESDAY 8AM-6PM ONLY": legal only inside those hours
     else if (hmp || (/\d+\s*(HR|HOUR|MIN)/.test(s) && /PARKING/.test(s))) p.kind = 'limit';
-    else if (/TRUCKS? LOADING|COMMERCIAL VEHICLES|AUTHORIZED VEHICLES|HANDICAP|DIPLOMAT|BUS STOP|TAXI|HYDRANT|BIKE CORRAL/.test(s)) p.kind = 'restricted';
+    else if (/TRUCKS? LOADING|COMMERCIAL VEHICLES|AUTHORIZED VEHICLES|HANDICAP|DIPLOMAT|BUS STOP|TAXI|HYDRANT|BIKE CORRAL|\bAVO\b|LOADING ONLY|\bNLZ\b|AMBULANCE|AMBULETTE|DOCTOR LICENSE|PRESS \(SYMBOL\)|FARMERS MARKET|ROAD TEST|ELECTRIC VEHICLE|LAYOVER ONLY/.test(s)) p.kind = 'restricted';   // AVO = authorized vehicles only (police, school, fire...)
     p.metered = !!hmp || /METER/.test(s);
     const lim = hmp ? [null, hmp[1], 'HR'] : s.match(/(\d+)\s*(HR|HOUR|MIN)/);
     if (lim) { const n = lim[1].includes('/') ? 0.5 : +lim[1]; p.limitMin = n * (lim[2] === 'MIN' ? 1 : 60); }
@@ -122,7 +123,11 @@
   // How long can a car arriving at `start` stay? Returns minutes and details.
   function stay(parsed, start, opts) {
     const tl = timeline(start, opts);
-    const pro = parsed.filter(p => PROHIBIT.has(p.kind)).map(p => activeArr(p, tl));
+    const pro = parsed.filter(p => PROHIBIT.has(p.kind) || p.kind === 'permit').map(p => {
+      const a = activeArr(p, tl);
+      if (p.kind !== 'permit') return a;
+      const inv = new Uint8Array(N_STEPS); for (let i = 0; i < N_STEPS; i++) inv[i] = a[i] ? 0 : 1; return inv;   // permitted-only: blocked when the window is NOT active
+    });
     const blocked = i => { for (const a of pro) if (a[i]) return true; return false; };
     if (blocked(0)) {
       let firstFree = -1;
@@ -132,10 +137,10 @@
     let end = CAP;
     for (let i = 1; i < N_STEPS; i++) if (blocked(i)) {
       end = i * STEP;
-      const prohib = parsed.filter(p => PROHIBIT.has(p.kind));   // refine to the exact minute the rule starts
+      const prohib = parsed.filter(p => PROHIBIT.has(p.kind) || p.kind === 'permit');   // refine to the exact minute the rule starts
       for (let m = (i - 1) * STEP + 1; m < i * STEP; m++) {
         const t = new Date(start.getTime() + m * 60000);
-        if (prohib.some(p => activeAt(p, t, opts))) { end = m; break; }
+        if (prohib.some(p => p.kind === 'permit' ? !activeAt(p, t, opts) : activeAt(p, t, opts))) { end = m; break; }
       }
       break;
     }
@@ -157,9 +162,9 @@
   // yellow = must move tomorrow (#FFF200, deepening the later you can leave),
   // green = stay past tomorrow (light = day after tomorrow, deepening to dark green at the 7-day limit).
   const dayNum = d => Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000 + 0.5);
-  // "Tomorrow AM->PM" yellow range: h = hue (57 yellow, 80 lime, 105 = the 2 Days green), s = saturation %, l = lightness % (low l turns olive/brown, so keep it 44+).
+  // "Tomorrow AM->PM" range: amber-yellow early (h 44) to plain yellow late (h 58); stays well short of the 2 Days green (h 105), s = saturation %, l = lightness % (low l turns olive/brown, so keep it 44+).
   // 0 = tomorrow morning, 1 = tomorrow night. Edit these five numbers to retune; the legend bar follows automatically.
-  const TOMORROW = { h0: 57, h1: 82, s: 100, l0: 50, l1: 46 };
+  const TOMORROW = { h0: 44, h1: 58, s: 100, l0: 50, l1: 47 };
   function colorFor(min, never, start) {
     if (never) return '#b3001b';
     if (min <= 0) return '#7e3fc0';
@@ -167,7 +172,7 @@
     const ahead = min >= CAP ? 7 : dayNum(new Date(end.getTime() - 60000)) - dayNum(s0);   // leaving at exactly midnight counts as today
     if (ahead <= 0) return '#f57c00';
     if (ahead === 1) {
-      const f = Math.sqrt((end.getHours() * 60 + end.getMinutes()) / 1440);
+      const e1 = new Date(end.getTime() - 60000), f = Math.sqrt((e1.getHours() * 60 + e1.getMinutes() + 1) / 1440);   // ending at 12 AM = the last minute of tomorrow (1440), not the first (0)
       return 'hsl(' + Math.round(TOMORROW.h0 + f * (TOMORROW.h1 - TOMORROW.h0)) + ',' + TOMORROW.s + '%,' + Math.round(TOMORROW.l0 + f * (TOMORROW.l1 - TOMORROW.l0)) + '%)';   // yellow shifting toward lime later in tomorrow
     }
     const f = Math.min(1, (ahead - 2) / 5);
