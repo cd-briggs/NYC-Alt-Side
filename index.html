@@ -665,8 +665,9 @@ const NOPARK_NAME = /\b(EXPY|HWY|TPKE|FDR|BQE|LIE|BRG|BRDG|BRIDGE|TUNNEL|RAMP|TR
 const isNoPark = w => w.rw === 2 || (w.pl === 0 && (w.rw === 3 || NOPARK_NAME.test(w.nm)));   // rw 2 = highway, 3 = bridge; pl = parking lanes (0 on 18k ordinary streets too, so it only counts together with the type or name)
 const MEDIAN_FT = 110;    // a same-name roadway this close beside a curb line, on its side and running parallel, means that curb line would sit in a median
 // Does a same-name parallel roadway lie beyond this curb point (on the side the curb piece faces)?
-function facesParallel(cands, mid, dx, dy, nx, ny) {
+function facesParallel(cands, mid, dx, dy, nx, ny, skipNoLane) {
   for (const o of cands) {
+    if (skipNoLane && o.pl === 0) continue;
     const P = o.tpts;
     for (let i = 0; i + 1 < P.length; i++) {
       const a = P[i], b = P[i + 1], sx = b[0] - a[0], sy = b[1] - a[1], L2 = sx * sx + sy * sy; if (!L2) continue;
@@ -709,7 +710,7 @@ function* buildChunks(ways) {
           const t0 = k / n, t1 = (k + 1) / n;
           const pt = t => { const u = t <= 0 ? 0 : t >= 1 ? 1 : t; return [x0 + (x1 - x0) * t + o0[0] + (o1[0] - o0[0]) * u, y0 + (y1 - y0) * t + o0[1] + (o1[1] - o0[1]) * u]; };
           const a = pt(t0), b = pt(t1), mid = pt((t0 + t1) / 2);
-          if (w.pl === 0 && cands.length && facesParallel(cands, mid, dx, dy, nx, ny)) continue;     // a no-parking-lane roadway flanked by same-name roads (a parkway's main road): no line. Service roads keep both sides.
+          if (cands.length && facesParallel(cands, mid, dx, dy, nx, ny, w.pl !== 0)) continue;     // median side: a parkway's main road (no parking lane) beside same-name roads, or two parallel carriageways (4th Ave) facing each other. A service road facing a no-lane main road keeps both sides.
           let faceKey = null, u, bestScore = Infinity, via = '';
           if (wf) for (const e of wf) {                                                // block sides resolved from the street network
             if (((e.forward ? s : -s) === 1) !== e.f.leftSide) continue;               // wrong side of the street for this block side
@@ -760,9 +761,11 @@ function* buildChunks(ways) {
   buildCorners(ways);
 }
 
-// Mitered corners: where two streets meet, the curb line of one street and the next street's curb line end on a shared diagonal (the miter line through the
-// point where the two lines would cross), a small gap apart, so they neither overlap nor leave a square notch. buildCorners finds each pair and tags the two end
-// pieces with {X, nm, sg}: X = the crossing point, nm = normal of the miter line, sg = which side of it this piece is on. draw() does the cutting (it depends on line width in px).
+// Rounded corners: where two streets meet, their curb lines are joined by one smooth curve around the block corner (a quadratic curve through the point X where the two
+// lines would cross, starting CORNER_R ft before X on each line). The curve is split at its middle into each street's own color, with a small gap, so lines neither
+// overlap nor leave a notch and the outside of the corner is round. Where two ways of one street meet nearly straight (a T's far side, a name change) the two lines
+// simply run together to a shared point. buildCorners tags the end pieces with {TA, TB, C, role}; applyCorner() bends the drawn run (feet, so no zoom dependence).
+const CORNER_R = 18, CORNER_GAP = 3;
 function buildCorners(ways) {
   const nodes = new Map();
   for (const w of ways) if (w.tpts && wayEnds.has(w)) for (const atStart of [true, false]) {
@@ -780,38 +783,52 @@ function buildCorners(ways) {
       const A = arms[i], B = arms[(i + 1) % arms.length];
       if (A === B || isNoPark(A.w) || isNoPark(B.w)) continue;
       let gap = B.ang - A.ang; if (gap <= 0) gap += 2 * Math.PI;
-      if (gap < 0.26 || gap > 2.9) continue;                                     // too sharp, or nearly straight
+      if (gap < 0.26 || gap > 3.4) continue;                                     // too sharp (or the long way round)
       // A's ccw side (left of "away from the node") and B's cw side; in travel terms that is side +1 at a way's start, -1 at its end (A), and the reverse for B
       const pa = (A.atStart ? wayEnds.get(A.w).first : wayEnds.get(A.w).last)[A.atStart ? 1 : -1], pb = (B.atStart ? wayEnds.get(B.w).first : wayEnds.get(B.w).last)[B.atStart ? -1 : 1];
       if (!pa || !pb) continue;                                                  // both curb lines must really be drawn there
       const PA = [A.end[0] - A.d[1] * OFFSET_FT, A.end[1] + A.d[0] * OFFSET_FT], PB = [B.end[0] + B.d[1] * OFFSET_FT, B.end[1] - B.d[0] * OFFSET_FT];
-      const ux = -A.d[0], uy = -A.d[1], vx = -B.d[0], vy = -B.d[1], den = ux * vy - uy * vx;
-      if (Math.abs(den) < 0.2) continue;
-      const rx = PB[0] - PA[0], ry = PB[1] - PA[1], sA = (rx * vy - ry * vx) / den;
-      if (Math.abs(sA) > 120) continue;
-      const X = [PA[0] + ux * sA, PA[1] + uy * sA];
-      let mx = ux + vx, my = uy + vy; const ml = Math.hypot(mx, my); if (ml < 0.1) continue;
-      const nm = [-my / ml, mx / ml], sgA = Math.sign((PA[0] - X[0]) * nm[0] + (PA[1] - X[1]) * nm[1]), sgB = Math.sign((PB[0] - X[0]) * nm[0] + (PB[1] - X[1]) * nm[1]);
-      if (!sgA || !sgB || sgA === sgB) continue;
-      pa[A.atStart ? 'cnA' : 'cnB'] = { X, nm, sg: sgA }; pb[B.atStart ? 'cnA' : 'cnB'] = { X, nm, sg: sgB };
+      const ux = -A.d[0], uy = -A.d[1], vx = -B.d[0], vy = -B.d[1];
+      let TA, TB, C;
+      if (gap > 2.9) {                                                            // nearly straight: run the two lines together to their midpoint
+        C = [(PA[0] + PB[0]) / 2, (PA[1] + PB[1]) / 2];
+        const sa = (C[0] - PA[0]) * ux + (C[1] - PA[1]) * uy, sb = (C[0] - PB[0]) * vx + (C[1] - PB[1]) * vy;
+        TA = [PA[0] + ux * sa, PA[1] + uy * sa]; TB = [PB[0] + vx * sb, PB[1] + vy * sb];
+      } else {
+        const den = ux * vy - uy * vx; if (Math.abs(den) < 0.2) continue;
+        const rx = PB[0] - PA[0], ry = PB[1] - PA[1], sA = (rx * vy - ry * vx) / den; if (Math.abs(sA) > 120) continue;
+        C = [PA[0] + ux * sA, PA[1] + uy * sA];
+        const th = Math.acos(Math.max(-1, Math.min(1, ux * vx + uy * vy))), t = Math.min(CORNER_R / Math.tan(th / 2), 60);   // tangent length for a CORNER_R fillet
+        TA = [C[0] - ux * t, C[1] - uy * t]; TB = [C[0] - vx * t, C[1] - vy * t];
+      }
+      pa[A.atStart ? 'cnA' : 'cnB'] = { TA, TB, C, role: 'A' }; pb[B.atStart ? 'cnA' : 'cnB'] = { TA, TB, C, role: 'B' };
     }
   }
 }
-
-// Cut one end of a run (state-plane ft points) along its corner's miter line. Returns the quadrilateral that fills the diagonal end, or null (then the end keeps its round cap).
-// h = half the line width in ft, gap = ft the line stops short of the shared diagonal.
-function mitreEnd(pts, atStart, cn, h, gap) {
-  const n = pts.length; if (n < 2) return null;
-  const E = atStart ? pts[0] : pts[n - 1], Pv = atStart ? pts[1] : pts[n - 2];
-  let dx = E[0] - Pv[0], dy = E[1] - Pv[1]; const L = Math.hypot(dx, dy); if (L < 0.01) return null; dx /= L; dy /= L;
-  const dn = dx * cn.nm[0] + dy * cn.nm[1]; if (Math.abs(dn) < 0.25) return null;
-  const px = -dy, py = dx, off = cn.sg * gap, tOf = (x, y) => (off - ((x - cn.X[0]) * cn.nm[0] + (y - cn.X[1]) * cn.nm[1])) / dn;   // distance to move along d to reach the cut line
-  const tC = tOf(E[0], E[1]), t1 = tOf(E[0] + px * h, E[1] + py * h), t2 = tOf(E[0] - px * h, E[1] - py * h), tb = Math.min(t1, t2) - 0.02 * h;
-  if (tb < -L * 0.9 || tb > 400 || Math.abs(tC) > 400) return null;
-  const B0 = [E[0] + dx * tb, E[1] + dy * tb];
-  const poly = [[B0[0] + px * h, B0[1] + py * h], [E[0] + px * h + dx * t1, E[1] + py * h + dy * t1], [E[0] - px * h + dx * t2, E[1] - py * h + dy * t2], [B0[0] - px * h, B0[1] - py * h]];
-  if (atStart) pts[0] = B0; else pts[n - 1] = B0;
-  return poly;
+const bez = (cn, t) => { const m = 1 - t; return [m * m * cn.TA[0] + 2 * m * t * cn.C[0] + t * t * cn.TB[0], m * m * cn.TA[1] + 2 * m * t * cn.C[1] + t * t * cn.TB[1]]; };
+// Bend one end of a run (state-plane ft points, in place) into its half of the corner curve. Returns false (nothing changed) if the geometry does not fit; the end then keeps its round cap.
+function applyCorner(pts, atStart, cn) {
+  const arr = atStart ? pts.slice().reverse() : pts.slice(), n = arr.length; if (n < 2) return false;
+  const T = cn.role === 'A' ? cn.TA : cn.TB;
+  const last = arr[n - 1], prev = arr[n - 2]; let gx = last[0] - prev[0], gy = last[1] - prev[1]; const gl = Math.hypot(gx, gy); if (!gl) return false; gx /= gl; gy /= gl;
+  let res;
+  if ((T[0] - last[0]) * gx + (T[1] - last[1]) * gy >= 0) {                  // the corner point lies beyond the end: extend
+    if (Math.hypot(T[0] - last[0], T[1] - last[1]) > 80 || Math.abs((T[0] - last[0]) * gy - (T[1] - last[1]) * gx) > 8) return false;
+    res = arr.concat([T]);
+  } else {                                                                   // the line runs past the corner point: cut it there
+    let k = -1;
+    for (let i = n - 2; i >= 0; i--) { const a = arr[i], b = arr[i + 1], sx = b[0] - a[0], sy = b[1] - a[1]; if ((T[0] - a[0]) * sx + (T[1] - a[1]) * sy >= 0) { const L = Math.hypot(sx, sy) || 1; if (Math.abs((T[0] - a[0]) * sy - (T[1] - a[1]) * sx) / L > 8) return false; k = i; break; } }
+    if (k < 0) return false;
+    res = arr.slice(0, k + 1).concat([T]);
+  }
+  let len = 0, pv = bez(cn, 0); for (let k = 1; k <= 10; k++) { const q = bez(cn, k / 10); len += Math.hypot(q[0] - pv[0], q[1] - pv[1]); pv = q; }
+  if (len > 1) {
+    const tcut = len < 6 ? 0.5 : 0.5 - (CORNER_GAP / 2) / len;
+    for (let k = 1; k <= 8; k++) { const t = tcut * k / 8; res.push(bez(cn, cn.role === 'A' ? t : 1 - t)); }
+  }
+  if (atStart) res.reverse();
+  pts.length = 0; for (const q of res) pts.push(q);
+  return true;
 }
 
 // The curb piece nearest a click (x, y in state plane ft), within tol ft, or null.
@@ -934,7 +951,7 @@ let drawnSeq = 0;
 // Zoom changed but not the data or the colors: only the line widths differ, so restyle the existing lines instead of rebuilding them.
 function restyleWeights() {
   const w = weightFor(map.getZoom());
-  layer.eachLayer(l => { if (l.options.poly) return; const ww = l.options.nd ? Math.max(3, w - 1) : w; if (l.setRadius) l.setRadius(ww / 2); else l.setStyle({ weight: ww }); });   // end-cap dots are circle markers
+  layer.eachLayer(l => { const ww = l.options.nd ? Math.max(3, w - 1) : w; if (l.setRadius) l.setRadius(ww / 2); else l.setStyle({ weight: ww }); });   // end-cap dots are circle markers
   drawnZoom = map.getZoom();
 }
 async function draw() {
@@ -947,20 +964,14 @@ async function draw() {
   const z = map.getZoom(), weight = weightFor(z);
   const ck = Math.floor(start.getTime() / 60000) + '|' + mode + '|' + durMin;   // evaluation results are cached on each curb piece under this key
   const colorOf = r => r.metered ? null : mode === 'now' ? C.colorNow(r) : mode === 'dur' ? C.colorDur(r, durMin) : C.colorFor(r.min, r.never, start);
-  const MITRE = z >= 17, ftpp = 156543.03 * Math.cos(map.getCenter().lat * Math.PI / 180) / 2 ** z * 3.28084;   // ft per screen pixel
   let nodata = 0, run = null;
   const flush = () => {
     if (!run) return;
     const { metered, ...st } = run.style;
-    // mitered corner ends (zoom 17+, not on metered runs): cut the end on the shared diagonal and fill it with a quadrilateral
-    const polys = [];
-    if (MITRE && !metered) {
-      const h = st.weight / 2 * ftpp, gapFt = (1.2 + st.weight * 0.05) * ftpp;
-      if (run.cnA) { const q = mitreEnd(run.pts, true, run.cnA, h, gapFt); if (q) { polys.push(q); run.capA = false; } }
-      if (run.cnB) { const q = mitreEnd(run.pts, false, run.cnB, h, gapFt); if (q) { polys.push(q); run.capB = false; } }
-    }
+    // rounded corners: bend each end that has a corner into its half of the corner curve (no round cap there)
+    if (run.cnA && applyCorner(run.pts, true, run.cnA)) run.capA = false;
+    if (run.cnB && applyCorner(run.pts, false, run.cnB)) run.capB = false;
     const ll = run.pts.map(llOf);
-    for (const q of polys) L.polygon(q.map(p => toLL(p[0], p[1])), { stroke: false, fillColor: st.color, fillOpacity: st.opacity, interactive: false, nd: !!st.nd, poly: true }).addTo(nl);
     // clicks are handled by map.on('click') below, so these shapes are not interactive
     // metered = alternating stripes: a solid steel-blue line underneath, the status color dashed on top
     if (metered) L.polyline(ll, { color: METER_BLUE, weight: st.weight, opacity: 1, lineCap: 'butt', interactive: false }).addTo(nl);
@@ -1379,7 +1390,7 @@ map.on('moveend', () => {
   if (loadedBounds && map.getZoom() >= (window.TILE_INDEX ? MIN_LINE_ZOOM : 16) && loadedBounds.contains(map.getBounds())) {
     if (map.getZoom() !== drawnZoom) {
       const z = map.getZoom();
-      if (drawnSeq === drawSeq && !building && drawnZoom != null && (drawnZoom > 16) === (z > 16) && z < 17 && drawnZoom < 17) restyleWeights(); else draw();
+      if (drawnSeq === drawSeq && !building && drawnZoom != null && (drawnZoom > 16) === (z > 16)) restyleWeights(); else draw();
     }
     drawHydrants();
     return;
